@@ -1,4 +1,4 @@
-package com.woopi.safehome.domain.job.application.port.inbound
+package com.woopi.safehome.domain.analysisjob.application.port.inbound
 
 interface JobUseCase {
 

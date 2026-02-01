@@ -1,9 +1,13 @@
-package com.woopi.safehome.domain.analysis.application.port.outbound
+package com.woopi.safehome.domain.analysisjob.application.port.outbound
 
 import com.woopi.safehome.global.enums.AnalysisStep
 import com.woopi.safehome.global.enums.JobStatus
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter
 
-interface AnalysisNotifierPort {
+interface AnalysisSseNotifierPort {
+
+    fun createEmitter(jobId: String): SseEmitter
+
     fun notifyStep(
         jobId: String,
         status: JobStatus,

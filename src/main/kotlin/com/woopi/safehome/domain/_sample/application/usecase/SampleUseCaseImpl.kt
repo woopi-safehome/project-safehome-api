@@ -5,7 +5,7 @@ import com.woopi.safehome.domain._sample.adapter.inbound.web.dto.SampleRequest
 import com.woopi.safehome.domain._sample.adapter.inbound.web.dto.SampleResponse
 import com.woopi.safehome.domain._sample.application.port.inbound.SampleUseCase
 import com.woopi.safehome.domain._sample.application.port.outbound.SamplePersistencePort
-import com.woopi.safehome.domain.analysis.application.service.AnalysisAsyncProcessor
+import com.woopi.safehome.domain.analysisjob.application.service.AnalysisAsyncProcessor
 import com.woopi.safehome.global.exception.BusinessException
 import com.woopi.safehome.global.exception.ErrorCode
 import org.springframework.stereotype.Service

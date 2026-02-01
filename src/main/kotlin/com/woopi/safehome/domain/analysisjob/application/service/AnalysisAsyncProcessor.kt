@@ -1,6 +1,6 @@
-package com.woopi.safehome.domain.analysis.application.service
+package com.woopi.safehome.domain.analysisjob.application.service
 
-import com.woopi.safehome.domain.analysis.application.port.outbound.AnalysisNotifierPort
+import com.woopi.safehome.domain.analysisjob.application.port.outbound.AnalysisSseNotifierPort
 import com.woopi.safehome.global.enums.AnalysisStep
 import com.woopi.safehome.global.enums.JobStatus
 import org.springframework.scheduling.annotation.Async
@@ -8,7 +8,7 @@ import org.springframework.stereotype.Service
 
 @Service
 class AnalysisAsyncProcessor(
-    private val analysisProgressPort: AnalysisNotifierPort
+    private val analysisProgressPort: AnalysisSseNotifierPort
 ) {
 
     @Async

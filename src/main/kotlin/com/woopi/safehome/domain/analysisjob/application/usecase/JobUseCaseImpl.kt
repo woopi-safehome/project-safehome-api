@@ -1,6 +1,6 @@
-package com.woopi.safehome.domain.job.application.usecase
+package com.woopi.safehome.domain.analysisjob.application.usecase
 
-import com.woopi.safehome.domain.job.application.port.inbound.JobUseCase
+import com.woopi.safehome.domain.analysisjob.application.port.inbound.JobUseCase
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.util.*

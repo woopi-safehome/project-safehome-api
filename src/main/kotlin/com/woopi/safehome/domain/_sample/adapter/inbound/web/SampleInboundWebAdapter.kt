@@ -3,7 +3,7 @@ package com.woopi.safehome.domain._sample.adapter.inbound.web
 import com.woopi.safehome.domain._sample.adapter.inbound.web.dto.SampleRequest
 import com.woopi.safehome.domain._sample.adapter.inbound.web.dto.SampleResponse
 import com.woopi.safehome.domain._sample.application.port.inbound.SampleUseCase
-import com.woopi.safehome.domain.analysis.adapter.outbound.sse.AnalysisSseNotifier
+import com.woopi.safehome.domain.analysisjob.adapter.outbound.sse.AnalysisSseNotifier
 import com.woopi.safehome.global.response.ApiResponse
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.tags.Tag

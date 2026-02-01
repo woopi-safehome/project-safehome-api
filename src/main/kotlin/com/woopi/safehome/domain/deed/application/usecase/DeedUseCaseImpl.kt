@@ -1,8 +1,7 @@
 package com.woopi.safehome.domain.deed.application.usecase
 
-import com.woopi.safehome.domain.deed.adapter.inbound.web.dto.DeedDtoMapper
+import com.woopi.safehome.domain.analysisjob.application.port.outbound.AnalysisSseNotifierPort
 import com.woopi.safehome.domain.deed.adapter.inbound.web.dto.DeedRequest
-import com.woopi.safehome.domain.deed.adapter.inbound.web.dto.DeedResponse
 import com.woopi.safehome.domain.deed.application.port.inbound.DeedUseCase
 import com.woopi.safehome.domain.deed.application.port.outbound.AnalysisJobPersistencePort
 import com.woopi.safehome.domain.deed.model.AnalysisJob
@@ -10,41 +9,55 @@ import com.woopi.safehome.global.enums.JobStatus
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter
 import java.util.UUID
 
 @Transactional(readOnly = true)
 @Service
 class DeedUseCaseImpl (
-    private val analysisJobPersistencePort: AnalysisJobPersistencePort
-): DeedUseCase {
+    private val analysisJobPersistencePort: AnalysisJobPersistencePort,
+    private val analysisSseNotifierPort: AnalysisSseNotifierPort,
+
+    ): DeedUseCase {
 
     private val logger = LoggerFactory.getLogger(javaClass)
 
-    override fun analyzeDeed(request: DeedRequest.Analyze): DeedResponse {
+    @Transactional
+    override fun analyzeDeed(request: DeedRequest.Analyze): SseEmitter {
 
-        val file = request.file
-
-        logger.info("📤 분석 요청 - fileName: ${file.originalFilename}, size: ${file.size}")
-
-        // 파일 검증
-        require(!file.isEmpty) { "파일이 비어있습니다" }
-        require(file.contentType == "application/pdf") { "PDF 파일만 가능합니다" }
-        require(file.size <= 50 * 1024 * 1024) { "파일은 50MB 이하여야 합니다" }
-
+        // 고유 Job ID 생성
         val jobId = UUID.randomUUID().toString()
 
+        // Job 생성 (아직 아무 작업도 안 함)
         val job = AnalysisJob.Create(
             jobId = jobId,
-            fileName = file.originalFilename ?: "unknown.pdf",
-            fileSize = file.size,
+            fileName = "test_pdf.pdf",
+            fileSize = 1024L,
             status = JobStatus.PENDING,
         )
 
-        val savedJob = analysisJobPersistencePort.save(job)
+        analysisJobPersistencePort.save(job)
 
-        logger.info("✅ 분석 완료 - jobId: $jobId")
+        logger.info("📌 분석 Job 생성 - jobId={}", jobId)
 
-        return DeedDtoMapper.toResponse(savedJob)
+        // 3️⃣ SSE Emitter 생성 (예: 30분)
+        val emitter = analysisSseNotifierPort.createEmitter(jobId)
+
+        // 4️⃣ SSE 연결 성공 이벤트 전송
+        try {
+            analysisSseNotifierPort.notifyStep(
+                jobId = jobId,
+                JobStatus.PENDING,
+                null,
+                "분석 작업이 시작되었습니다."
+            )
+        } catch (e: Exception) {
+            logger.error("❌ SSE 연결 실패 - jobId={}", jobId, e)
+            emitter.completeWithError(e)
+        }
+
+        // 5️⃣ emitter 반환 (연결 유지)
+        return emitter
     }
 
 }

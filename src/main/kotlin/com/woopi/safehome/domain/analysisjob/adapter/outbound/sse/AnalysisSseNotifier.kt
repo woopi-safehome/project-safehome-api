@@ -1,6 +1,6 @@
-package com.woopi.safehome.domain.analysis.adapter.outbound.sse
+package com.woopi.safehome.domain.analysisjob.adapter.outbound.sse
 
-import com.woopi.safehome.domain.analysis.application.port.outbound.AnalysisNotifierPort
+import com.woopi.safehome.domain.analysisjob.application.port.outbound.AnalysisSseNotifierPort
 import com.woopi.safehome.global.enums.AnalysisStep
 import com.woopi.safehome.global.enums.JobStatus
 import org.springframework.stereotype.Component
@@ -9,11 +9,11 @@ import java.time.LocalDateTime
 import java.util.concurrent.ConcurrentHashMap
 
 @Component
-class AnalysisSseNotifier: AnalysisNotifierPort {
+class AnalysisSseNotifier: AnalysisSseNotifierPort {
 
     private val emitters = ConcurrentHashMap<String, SseEmitter>()
 
-    fun createEmitter(jobId: String): SseEmitter {
+    override fun createEmitter(jobId: String): SseEmitter {
         val emitter = SseEmitter(300_000L) // 5분 타임아웃
 
         emitter.onCompletion { emitters.remove(jobId) }
@@ -39,10 +39,16 @@ class AnalysisSseNotifier: AnalysisNotifierPort {
         )
 
         emitters[jobId]?.let { emitter ->
-            emitter.send(SseEmitter.event().data(payload))
+
+            try {
+                emitter.send(SseEmitter.event().data(payload))
+            } catch (ex: Exception) {
+                emitters.remove(jobId)
+                emitter.completeWithError(ex)
+            }
 
             // 완료되면 명시적으로 종료
-            if (status == JobStatus.COMPLETED) {
+            if (status == JobStatus.COMPLETED || status == JobStatus.FAILED) {
                 emitter.complete()
                 emitters.remove(jobId)
             }

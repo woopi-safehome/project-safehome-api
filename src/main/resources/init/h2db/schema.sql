@@ -44,13 +44,13 @@ CREATE TABLE IF NOT EXISTS analysis_jobs (
     step VARCHAR(100) NULL COMMENT '현재 단계(예 : PDF_PARSING, LLM_ANALYSIS, POST_PROCESSING)',
     result TEXT NULL COMMENT '분석 결과 JSON',
     description TEXT NULL COMMENT '설명 (에러메시지 등)',
-    is_deleted BOOLEAN NOT NULL DEFAULT FALSE COMMENT '삭제 여부',
     created_id BIGINT NOT NULL COMMENT '생성자 ID',
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '생성 시간',
     updated_id BIGINT NULL COMMENT '수정자 ID',
-    updated_at TIMESTAMP NULL DEFAULT NULL COMMENT '수정 시간'
+    updated_at TIMESTAMP NULL DEFAULT NULL COMMENT '수정 시간',
+
+    UNIQUE KEY uk_analysis_jobs_job_id (job_id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_analysis_jobs_job_id ON analysis_jobs(job_id);
 CREATE INDEX IF NOT EXISTS idx_analysis_jobs_status ON analysis_jobs(status);
 CREATE INDEX IF NOT EXISTS idx_analysis_jobs_step ON analysis_jobs(step);
