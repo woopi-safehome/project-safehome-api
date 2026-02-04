@@ -1,6 +1,7 @@
 package com.woopi.safehome.domain.deed.domain.service.impl
 
 import com.woopi.safehome.domain.deed.domain.service.PdfValidationService
+import com.woopi.safehome.domain.deed.domain.service.exception.InvalidPdfException
 import org.springframework.stereotype.Component
 import org.springframework.web.multipart.MultipartFile
 

@@ -5,18 +5,15 @@ import com.woopi.safehome.domain._sample.adapter.inbound.web.dto.SampleRequest
 import com.woopi.safehome.domain._sample.adapter.inbound.web.dto.SampleResponse
 import com.woopi.safehome.domain._sample.application.port.inbound.SampleUseCase
 import com.woopi.safehome.domain._sample.application.port.outbound.SamplePersistencePort
-import com.woopi.safehome.domain.analysisjob.application.service.AnalysisAsyncProcessor
 import com.woopi.safehome.global.exception.BusinessException
 import com.woopi.safehome.global.exception.ErrorCode
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
-import java.util.*
 
 @Transactional(readOnly = true)
 @Service
 class SampleUseCaseImpl(
     private val samplePersistencePort: SamplePersistencePort,
-    private val analysisAsyncProcessor: AnalysisAsyncProcessor
 ) : SampleUseCase {
 
     override fun getSampleList(request: SampleRequest.Search): List<SampleResponse> {
@@ -45,14 +42,5 @@ class SampleUseCaseImpl(
     override fun deleteSample(id: Long): SampleResponse {
         TODO("Not yet implemented")
     }
-
-    override fun getJobId(): String {
-        return UUID.randomUUID().toString()
-    }
-
-    override fun sseSample(jobId: String) {
-        analysisAsyncProcessor.process(jobId)
-    }
-
 
 }

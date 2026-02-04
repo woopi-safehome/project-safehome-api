@@ -3,6 +3,7 @@ package com.woopi.safehome.domain.deed.application.usecase
 import com.woopi.safehome.domain.analysisjob.application.port.outbound.AnalysisSseNotifierPort
 import com.woopi.safehome.domain.deed.adapter.inbound.web.dto.DeedRequest
 import com.woopi.safehome.domain.deed.application.port.inbound.DeedUseCase
+import com.woopi.safehome.domain.deed.application.port.outbound.AnalysisJobExecutorPort
 import com.woopi.safehome.domain.deed.application.port.outbound.AnalysisJobPersistencePort
 import com.woopi.safehome.domain.deed.model.AnalysisJob
 import com.woopi.safehome.global.enums.JobStatus
@@ -10,15 +11,15 @@ import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter
-import java.util.UUID
+import java.util.*
 
 @Transactional(readOnly = true)
 @Service
-class DeedUseCaseImpl (
+class DeedUseCaseImpl(
     private val analysisJobPersistencePort: AnalysisJobPersistencePort,
     private val analysisSseNotifierPort: AnalysisSseNotifierPort,
-
-    ): DeedUseCase {
+    private val analysisJobExecutorPort: AnalysisJobExecutorPort
+) : DeedUseCase {
 
     private val logger = LoggerFactory.getLogger(javaClass)
 
