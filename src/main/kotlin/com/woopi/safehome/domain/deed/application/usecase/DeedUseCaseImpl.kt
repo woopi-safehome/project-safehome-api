@@ -31,32 +31,29 @@ class DeedUseCaseImpl (
         // Job 생성 (아직 아무 작업도 안 함)
         val job = AnalysisJob.Create(
             jobId = jobId,
-            fileName = "test_pdf.pdf",
-            fileSize = 1024L,
+            fileName = request.file.originalFilename ?: "unknown.pdf",
+            fileSize = request.file.size,
             status = JobStatus.PENDING,
         )
 
+        // Job 저장
         analysisJobPersistencePort.save(job)
 
-        logger.info("📌 분석 Job 생성 - jobId={}", jobId)
-
-        // 3️⃣ SSE Emitter 생성 (예: 30분)
+        // SSE Emitter 생성 (예: 30분)
         val emitter = analysisSseNotifierPort.createEmitter(jobId)
 
-        // 4️⃣ SSE 연결 성공 이벤트 전송
-        try {
-            analysisSseNotifierPort.notifyStep(
-                jobId = jobId,
-                JobStatus.PENDING,
-                null,
-                "분석 작업이 시작되었습니다."
-            )
-        } catch (e: Exception) {
-            logger.error("❌ SSE 연결 실패 - jobId={}", jobId, e)
-            emitter.completeWithError(e)
-        }
+        // SSE 연결 성공 이벤트 전송
+        analysisSseNotifierPort.notifyStep(
+            jobId = jobId,
+            JobStatus.PENDING,
+            null,
+            "분석 작업이 시작되었습니다."
+        )
 
-        // 5️⃣ emitter 반환 (연결 유지)
+        analysisJobExecutorPort.execute(jobId, request.file)
+
+
+        // emitter 반환 (연결 유지)
         return emitter
     }
 
