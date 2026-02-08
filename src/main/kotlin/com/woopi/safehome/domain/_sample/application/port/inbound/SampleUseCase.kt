@@ -2,6 +2,7 @@ package com.woopi.safehome.domain._sample.application.port.inbound
 
 import com.woopi.safehome.domain._sample.adapter.inbound.web.dto.SampleRequest
 import com.woopi.safehome.domain._sample.adapter.inbound.web.dto.SampleResponse
+import org.springframework.web.multipart.MultipartFile
 
 interface SampleUseCase {
 
@@ -29,5 +30,10 @@ interface SampleUseCase {
      * 샘플 삭제
      */
     fun deleteSample(id: Long): SampleResponse
+
+    /**
+     * PDF 파싱 샘플
+     */
+    fun parsePdfSample(file: MultipartFile): String
 
 }

@@ -38,7 +38,7 @@ class DeedUseCaseImpl(
         )
 
         // Job 저장
-        analysisJobPersistencePort.save(job)
+        analysisJobPersistencePort.create(job)
 
         // SSE Emitter 생성 (예: 30분)
         val emitter = analysisSseNotifierPort.createEmitter(jobId)

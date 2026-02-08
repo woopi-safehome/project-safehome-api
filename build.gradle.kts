@@ -30,6 +30,8 @@ val coroutineReactorVersion = "1.10.2"
 
 val embeddedRedisVersion = "0.7.3"
 
+val pdfBoxVersion = "3.0.3"
+
 dependencies {
 	implementation("org.springframework.boot:spring-boot-starter-data-jpa")
 	implementation("org.springframework.boot:spring-boot-starter-web")
@@ -58,6 +60,9 @@ dependencies {
 
 	// Swagger
 	implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:$springdocVersion")
+
+	// PDFBox
+	implementation("org.apache.pdfbox:pdfbox:$pdfBoxVersion")
 
 	// kotest
 	testImplementation(platform("io.kotest:kotest-bom:$kotestVersion"))
