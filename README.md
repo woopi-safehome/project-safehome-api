@@ -1,47 +1,102 @@
-# project-safehome-api
+# SafeHome API
 
-project-safehome-api
+등기부등본 PDF 분석 서비스
 
-- 패키지 구조
-    - src/
-        - main/
-            - kotlin/
-                - com.woopi.safehome/
-                    - domain/ # 서비스 도메인 관련 클래스
-                        - domainA/ # 도메인 A 관련 클래스
-                            - adapter/ # 도메인 A 어댑터 클래스
-                                - inbound/ # 도메인 A 인바운드 어댑터 클래스
-                                    - web/ # 도메인 A 웹 어댑터
-                                        - dto # 도메인 A DTO 클래스
-                                    - ...
-                                - outbound/ # 도메인 A 아웃바운드 어댑터
-                                    - persistence/ # 도메인 A 영속성 어댑터
-                                        - entity/ # 도메인 A 엔티티 클래스
-                                        - repository/ # 도메인 A 리포지토리 인터페이스 및 구현체
-                                    - ...
-                            - application/ # 도메인 A 애플리케이션 서비스 클래스
-                                - port/ # 도메인 A 포트 인터페이스
-                                    - inbound/ # 도메인 A 인바운드 포트 인터페이스
-                                    - outbound/ # 도메인 A 아웃바운드 포트 인터페이스
-                                - usecase/ # 도메인 A 유스케이스 클래스 (구현체)
-                            - model/ # 도메인 A 모델 클래스
-                        - domainB/ # 도메인 B 관련 클래스
-                            - ...
-                    - global/ # 전역 설정 및 유틸리티 클래스
-                        - config/ # 전역 설정 클래스
-                        - exception/ # 전역 예외 처리 클래스
-                        - util/ # 전역 유틸리티 클래스
-                        - ...
-            - resources/
-                - init/
-                    - h2db/
-                        - schema.sql # H2 데이터베이스 스키마 초기화 파일
-                        - data.sql # H2 데이터베이스 초기화 데이터 파일
-                    - mysql/
-                        - schema.sql # MySQL 데이터베이스 스키마 초기화 파일
-                        - data.sql # MySQL 데이터베이스 초기화 데이터 파일
-                - application.yml # 애플리케이션 설정 파일
-                - application-db.yml # 데이터베이스 설정 파일
-                - application-server.yml # 서버 설정 파일
-                - application-web.yml # 웹 설정 파일
-                - ...
+## 기술 스택
+
+| 항목 | 버전 |
+|------|------|
+| Kotlin | 2.1.0 |
+| Spring Boot | 3.5.8 |
+| JDK | 21 |
+| Gradle | Kotlin DSL |
+| H2 Database | MySQL 호환 모드 |
+| Apache PDFBox | 3.0.3 |
+| SpringDoc OpenAPI | 2.8.9 |
+| Kotest | 5.9.1 |
+
+## 아키텍처
+
+헥사고날 아키텍처 (Ports & Adapters) 기반의 DDD 구조
+
+```
+Client → Inbound Adapter (Controller)
+       → Inbound Port (UseCase interface)
+       → Application Service (UseCase impl)
+       → Domain Service / Model
+       → Outbound Port (interface)
+       → Outbound Adapter (Persistence / SSE / Async)
+```
+
+## 도메인
+
+| 도메인 | 설명 |
+|--------|------|
+| `deed` | 등기부등본 PDF 분석 (핵심 도메인) |
+| `analysisjob` | 비동기 분석 처리 + SSE 실시간 알림 |
+| `_sample` | CRUD 참조 구현 |
+
+## 패키지 구조
+
+```
+src/main/kotlin/com/woopi/safehome/
+├── domain/
+│   └── {domainName}/
+│       ├── adapter/
+│       │   ├── inbound/web/          # REST Controller
+│       │   └── outbound/
+│       │       ├── persistence/      # JPA Entity, Repository, Adapter
+│       │       └── sse/              # SSE Notifier
+│       ├── application/
+│       │   ├── port/
+│       │   │   ├── inbound/          # UseCase 인터페이스
+│       │   │   └── outbound/         # Persistence/Executor Port
+│       │   ├── usecase/              # UseCase 구현체
+│       │   └── service/              # Application Service
+│       ├── domain/service/           # Domain Service
+│       └── model/                    # Domain Model
+└── global/
+    ├── config/                       # Spring 설정
+    ├── datasource/                   # Read/Write DataSource 라우팅
+    ├── enums/                        # JobStatus, AnalysisStep
+    ├── exception/                    # ErrorCode, BusinessException, GlobalExceptionHandler
+    ├── object/                       # BaseEntity (감사 필드)
+    └── response/                     # ApiResponse (sealed class)
+```
+
+## API
+
+| Method | Path | 설명 |
+|--------|------|------|
+| POST | `/api/deed/analyze` | 등기부등본 PDF 분석 (SSE 응답) |
+| POST | `/api/job/id` | Job UUID 생성 |
+| GET | `/api/sample` | 샘플 목록 조회 |
+| GET | `/api/sample/details/{id}` | 샘플 상세 조회 |
+| POST | `/api/sample/pdf/parse` | PDF 텍스트 추출 |
+
+## 설정 파일
+
+| 파일 | 설명 |
+|------|------|
+| `application.yml` | 기본 설정 |
+| `application-db.yml` | DB 설정 (H2, Read/Write 분리, HikariCP) |
+| `application-swagger.yml` | OpenAPI 설정 (local/dev만 활성) |
+| `application-websocket.yml` | WebSocket 설정 |
+
+## 실행
+
+```bash
+./gradlew bootRun
+```
+
+- Swagger UI: http://localhost:8080/swagger-ui.html
+- H2 Console: http://localhost:8080/h2-console
+
+## 테스트
+
+```bash
+./gradlew test
+```
+
+- Kotest BDD BehaviorSpec (Given-When-Then)
+- JUnit 5 Platform
