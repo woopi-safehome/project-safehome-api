@@ -4,5 +4,7 @@ spring:
   config:
     import:
       - classpath:application-db.yml
+      - classpath:application-redis.yml
       - classpath:application-swagger.yml
       - classpath:application-websocket.yml
+      - classpath:application-logging.yml

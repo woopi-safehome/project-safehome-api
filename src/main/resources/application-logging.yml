@@ -1,0 +1,29 @@
+---
+spring:
+  config:
+    activate:
+      on-profile: local
+
+logging:
+  level:
+    com.woopi.safehome: DEBUG
+
+---
+spring:
+  config:
+    activate:
+      on-profile: dev
+
+logging:
+  level:
+    com.woopi.safehome: DEBUG
+
+---
+spring:
+  config:
+    activate:
+      on-profile: prd
+
+logging:
+  level:
+    com.woopi.safehome: ERROR
