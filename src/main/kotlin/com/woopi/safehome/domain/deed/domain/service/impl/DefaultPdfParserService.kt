@@ -1,7 +1,7 @@
 package com.woopi.safehome.domain.deed.domain.service.impl
 
 import com.woopi.safehome.domain.deed.domain.service.PdfParserService
-import com.woopi.safehome.domain.deed.model.DeedSections
+import com.woopi.safehome.domain.deed.domain.model.DeedSections
 import org.apache.pdfbox.Loader
 import org.apache.pdfbox.text.PDFTextStripper
 import org.springframework.stereotype.Service
