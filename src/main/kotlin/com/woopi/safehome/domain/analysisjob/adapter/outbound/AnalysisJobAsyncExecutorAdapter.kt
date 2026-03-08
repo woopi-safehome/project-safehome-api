@@ -1,7 +1,7 @@
 package com.woopi.safehome.domain.analysisjob.adapter.outbound
 
 import com.woopi.safehome.domain.analysisjob.application.service.AnalysisAsyncProcessor
-import com.woopi.safehome.domain.deed.application.port.outbound.AnalysisJobExecutorPort
+import com.woopi.safehome.domain.analysisjob.application.port.inbound.AnalysisJobExecutorPort
 import org.springframework.stereotype.Component
 import org.springframework.web.multipart.MultipartFile
 
