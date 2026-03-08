@@ -1,6 +1,6 @@
-package com.woopi.safehome.domain.deed.adapter.outbound.persistence.jpa
+package com.woopi.safehome.domain.analysisjob.adapter.outbound.persistence.jpa
 
-import com.woopi.safehome.domain.deed.model.AnalysisJob
+import com.woopi.safehome.domain.analysisjob.model.AnalysisJob
 
 object AnalysisJobEntityMapper {
 

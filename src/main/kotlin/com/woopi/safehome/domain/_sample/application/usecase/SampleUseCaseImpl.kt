@@ -63,11 +63,14 @@ class SampleUseCaseImpl(
                     stripper.getText(document)
                 }
             }
-            logger.info("PDF 파싱 완료 - 파일명: {}, 추출 텍스트 길이: {} chars", fileName, result.length)
+//            logger.info("PDF 파싱 완료 - 파일명: {}, 추출 텍스트 길이: {} chars", fileName, result.length)
             logger.debug("PDF 추출 내용:\n{}", result)
 
-            splitSections(result)
-            logger.debug("PDF 섹션 분할 완료 - 파일명: {}, 섹션 정보: {}", fileName, splitSections(result).keys)
+            val sections = splitSections(result)
+            logger.debug("PDF 섹션 분할 완료 - 파일명: {}, 섹션 키: {}", fileName, sections.keys)
+            sections.forEach { (key, value) ->
+                logger.debug("  섹션[{}] {}개, 내용:\n{}", key, value.size, value.joinToString("\n---\n"))
+            }
 
             result
         } catch (e: IOException) {
@@ -76,26 +79,26 @@ class SampleUseCaseImpl(
         }
     }
 
+    fun splitSections(text: String): Map<String, List<String>> {
+        // '-- 이 하 여 백 --' 이후는 불필요한 공백 표시이므로 제거 (띄어쓰기 유동적 처리)
+        val endMarker = Regex("""--\s*이\s*하\s*여\s*백\s*--""")
+        val effectiveText = endMarker.find(text)?.let { text.substring(0, it.range.first) } ?: text
 
-    fun splitSections(text: String): Map<String, String> {
-        val sectionPattern = Regex("""【\s*([표제부갑구을]+)\s*】""")
-        val matches = sectionPattern.findAll(text).toList()
+        val sectionPattern = Regex("""【([^】]*)】""")
+        val matches = sectionPattern.findAll(effectiveText).toList()
 
-        fun extractSection(keyword: String): String {
-            val start = matches.indexOfFirst { it.value.replace(" ", "").contains(keyword) }
-            if (start == -1) return ""
+        val result = LinkedHashMap<String, MutableList<String>>()
 
-            val startPos = matches[start].range.first
-            val endPos = if (start + 1 < matches.size) matches[start + 1].range.first else text.length
+        matches.forEachIndexed { index, match ->
+            val key = match.groupValues[1].replace(" ", "")
+            val startPos = match.range.first
+            val endPos = if (index + 1 < matches.size) matches[index + 1].range.first else effectiveText.length
+            val content = effectiveText.substring(startPos, endPos).trim()
 
-            return text.substring(startPos, endPos).trim()
+            result.getOrPut(key) { mutableListOf() }.add(content)
         }
 
-        return mapOf(
-            "titleSection" to extractSection("표제부"),
-            "ownershipSection" to extractSection("갑구"),
-            "rightsSection" to extractSection("을구")
-        )
+        return result
     }
 
 }

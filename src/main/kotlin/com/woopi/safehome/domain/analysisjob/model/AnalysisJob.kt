@@ -1,4 +1,4 @@
-package com.woopi.safehome.domain.deed.model
+package com.woopi.safehome.domain.analysisjob.model
 
 import com.woopi.safehome.global.enums.AnalysisStep
 import com.woopi.safehome.global.enums.JobStatus

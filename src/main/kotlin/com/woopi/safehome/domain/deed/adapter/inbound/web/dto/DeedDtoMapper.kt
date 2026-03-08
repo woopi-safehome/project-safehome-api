@@ -1,6 +1,6 @@
 package com.woopi.safehome.domain.deed.adapter.inbound.web.dto
 
-import com.woopi.safehome.domain.deed.model.AnalysisJob
+import com.woopi.safehome.domain.analysisjob.model.AnalysisJob
 
 object DeedDtoMapper {
 

@@ -1,6 +1,6 @@
-package com.woopi.safehome.domain.deed.application.port.outbound
+package com.woopi.safehome.domain.analysisjob.application.port.outbound
 
-import com.woopi.safehome.domain.deed.model.AnalysisJob
+import com.woopi.safehome.domain.analysisjob.model.AnalysisJob
 import com.woopi.safehome.global.enums.AnalysisStep
 import com.woopi.safehome.global.enums.JobStatus
 

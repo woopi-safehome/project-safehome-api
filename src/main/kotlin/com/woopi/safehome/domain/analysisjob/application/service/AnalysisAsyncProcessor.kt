@@ -1,9 +1,9 @@
 package com.woopi.safehome.domain.analysisjob.application.service
 
+import com.woopi.safehome.domain.analysisjob.application.port.outbound.AnalysisJobPersistencePort
 import com.woopi.safehome.domain.analysisjob.application.port.outbound.AnalysisSseNotifierPort
-import com.woopi.safehome.domain.deed.application.port.outbound.AnalysisJobPersistencePort
-import com.woopi.safehome.domain.deed.domain.service.PdfValidationService
-import com.woopi.safehome.domain.deed.domain.service.exception.InvalidPdfException
+import com.woopi.safehome.domain.analysisjob.application.port.outbound.PdfAnalysisException
+import com.woopi.safehome.domain.analysisjob.application.port.outbound.PdfAnalysisPort
 import com.woopi.safehome.global.enums.AnalysisStep
 import com.woopi.safehome.global.enums.JobStatus
 import org.springframework.scheduling.annotation.Async
@@ -13,8 +13,8 @@ import org.springframework.web.multipart.MultipartFile
 @Service
 class AnalysisAsyncProcessor(
     private val analysisProgressPort: AnalysisSseNotifierPort,
-    private val pdfValidationService: PdfValidationService,
-    private val analysisJobPersistencePort: AnalysisJobPersistencePort
+    private val analysisJobPersistencePort: AnalysisJobPersistencePort,
+    private val pdfAnalysisPort: PdfAnalysisPort
 ) {
 
     @Async
@@ -46,8 +46,8 @@ class AnalysisAsyncProcessor(
         )
 
         try {
-            pdfValidationService.validate(file)
-        } catch (e: InvalidPdfException) {
+            pdfAnalysisPort.process(file)
+        } catch (e: PdfAnalysisException) {
             updateAndNotify(
                 JobStatus.FAILED,
                 AnalysisStep.PDF_PARSING,

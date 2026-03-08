@@ -4,8 +4,8 @@ import com.woopi.safehome.domain.analysisjob.application.port.outbound.AnalysisS
 import com.woopi.safehome.domain.deed.adapter.inbound.web.dto.DeedRequest
 import com.woopi.safehome.domain.deed.application.port.inbound.DeedUseCase
 import com.woopi.safehome.domain.deed.application.port.outbound.AnalysisJobExecutorPort
-import com.woopi.safehome.domain.deed.application.port.outbound.AnalysisJobPersistencePort
-import com.woopi.safehome.domain.deed.model.AnalysisJob
+import com.woopi.safehome.domain.analysisjob.application.port.outbound.AnalysisJobPersistencePort
+import com.woopi.safehome.domain.analysisjob.model.AnalysisJob
 import com.woopi.safehome.global.enums.JobStatus
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
