@@ -45,7 +45,7 @@ class AnalysisAsyncProcessor(
             "첨부된 파일을 분석중이에요"
         )
 
-        try {
+        val pdfContent = try {
             pdfAnalysisPort.process(file)
         } catch (e: PdfAnalysisException) {
             updateAndNotify(

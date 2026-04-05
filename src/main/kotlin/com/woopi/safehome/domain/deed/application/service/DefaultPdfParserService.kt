@@ -1,16 +1,15 @@
-package com.woopi.safehome.domain.deed.domain.service.impl
+package com.woopi.safehome.domain.deed.application.service
 
-import com.woopi.safehome.domain.deed.domain.service.PdfParserService
 import com.woopi.safehome.domain.deed.domain.model.DeedSections
+import com.woopi.safehome.domain.deed.domain.service.PdfParserService
 import org.apache.pdfbox.Loader
 import org.apache.pdfbox.text.PDFTextStripper
 import org.springframework.stereotype.Service
-import org.springframework.web.multipart.MultipartFile
 
 @Service
 class DefaultPdfParserService : PdfParserService {
-    override fun parse(file: MultipartFile): DeedSections {
-        val text = Loader.loadPDF(file.inputStream.readBytes()).use {
+    override fun parse(content: ByteArray): DeedSections {
+        val text = Loader.loadPDF(content).use {
             PDFTextStripper().getText(it)
         }
         return DeedSections(splitSections(text))

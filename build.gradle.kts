@@ -79,6 +79,7 @@ dependencies {
 kotlin {
 	compilerOptions {
 		freeCompilerArgs.addAll("-Xjsr305=strict")
+		jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_21)
 	}
 }
 
@@ -88,6 +89,11 @@ allOpen {
 	annotation("jakarta.persistence.Embeddable")
 }
 
+springBoot {
+	mainClass.set("com.woopi.safehome.SafehomeApplicationKt")
+}
+
 tasks.withType<Test> {
 	useJUnitPlatform()
 }
+

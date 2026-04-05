@@ -2,6 +2,7 @@ package com.woopi.safehome.domain.deed.adapter.inbound.web
 
 import com.woopi.safehome.domain.deed.adapter.inbound.web.dto.DeedRequest
 import com.woopi.safehome.domain.deed.application.port.inbound.DeedUseCase
+import com.woopi.safehome.domain.deed.application.port.inbound.command.DeedCommand
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.tags.Tag
 import org.springframework.http.MediaType
@@ -28,7 +29,12 @@ class DeedInboundWebAdapter(
         produces = [MediaType.TEXT_EVENT_STREAM_VALUE]
     )
     fun analyzeDeed(@ModelAttribute request: DeedRequest.Analyze): SseEmitter {
-        return deedUseCase.analyzeDeed(request)
+        val command = DeedCommand.Analyze(         // adapter 책임: DTO → Command 변환
+            file = request.file,
+            fileName = request.file.originalFilename ?: "unknown.pdf",
+            fileSize = request.file.size,
+        )
+        return deedUseCase.analyzeDeed(command)
     }
 
 }
