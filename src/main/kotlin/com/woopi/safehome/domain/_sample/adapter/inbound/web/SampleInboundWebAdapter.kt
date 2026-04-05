@@ -3,7 +3,6 @@ package com.woopi.safehome.domain._sample.adapter.inbound.web
 import com.woopi.safehome.domain._sample.adapter.inbound.web.dto.SampleRequest
 import com.woopi.safehome.domain._sample.adapter.inbound.web.dto.SampleResponse
 import com.woopi.safehome.domain._sample.application.port.inbound.SampleUseCase
-import com.woopi.safehome.domain.analysisjob.adapter.outbound.sse.AnalysisSseNotifier
 import com.woopi.safehome.global.response.ApiResponse
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.tags.Tag
@@ -21,7 +20,6 @@ import org.springframework.web.multipart.MultipartFile
 @RequestMapping("/api/sample")
 class SampleInboundWebAdapter(
     private val sampleUseCase: SampleUseCase,
-    private val analysisSseNotifier: AnalysisSseNotifier
 ) {
 
     @Operation(summary = "샘플 리스트 조회", description = "샘플 리스트 조회")

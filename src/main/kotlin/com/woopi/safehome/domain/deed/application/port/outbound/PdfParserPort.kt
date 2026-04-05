@@ -1,7 +1,7 @@
-package com.woopi.safehome.domain.deed.domain.service
+package com.woopi.safehome.domain.deed.application.port.outbound
 
 import com.woopi.safehome.domain.deed.domain.model.DeedSections
 
-interface PdfParserService {
+interface PdfParserPort {
     fun parse(content: ByteArray): DeedSections
 }

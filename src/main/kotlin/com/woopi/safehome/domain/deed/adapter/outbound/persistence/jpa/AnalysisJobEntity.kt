@@ -1,4 +1,4 @@
-package com.woopi.safehome.domain.analysisjob.adapter.outbound.persistence.jpa
+package com.woopi.safehome.domain.deed.adapter.outbound.persistence.jpa
 
 import com.woopi.safehome.global.enums.AnalysisStep
 import com.woopi.safehome.global.enums.JobStatus
@@ -32,6 +32,4 @@ class AnalysisJobEntity(
     @Column(name = "description")
     var description: String? = null,
 
-    ) : BaseEntity() {
-
-}
+) : BaseEntity()

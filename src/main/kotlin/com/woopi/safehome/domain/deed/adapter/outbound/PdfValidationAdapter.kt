@@ -1,11 +1,11 @@
-package com.woopi.safehome.domain.deed.application.service
+package com.woopi.safehome.domain.deed.adapter.outbound
 
-import com.woopi.safehome.domain.deed.domain.service.PdfValidationService
-import com.woopi.safehome.domain.deed.domain.service.exception.InvalidPdfException
+import com.woopi.safehome.domain.deed.application.port.outbound.PdfValidationPort
+import com.woopi.safehome.domain.deed.domain.exception.InvalidPdfException
 import org.springframework.stereotype.Component
 
 @Component
-class DefaultPdfValidationService : PdfValidationService {
+class PdfValidationAdapter : PdfValidationPort {
 
     override fun validate(content: ByteArray, contentType: String?) {
         if (content.isEmpty()) {
