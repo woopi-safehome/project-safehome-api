@@ -21,6 +21,11 @@ class JobPersistenceAdapter(
         ).let { AnalysisJobEntityMapper.toModel(it) }
     }
 
+    override fun findByJobId(jobId: String): AnalysisJob.Data? {
+        return analysisJobRepository.findByJobId(jobId)
+            ?.let { AnalysisJobEntityMapper.toModel(it) }
+    }
+
     override fun updateStatus(
         jobId: String,
         status: JobStatus,

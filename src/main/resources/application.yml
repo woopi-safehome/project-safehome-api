@@ -8,3 +8,4 @@ spring:
       - classpath:application-swagger.yml
       - classpath:application-websocket.yml
       - classpath:application-logging.yml
+      - classpath:application-ai.yml

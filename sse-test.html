@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>등기부등본 분석 SSE 테스트</title>
+  <style>
+    body { font-family: monospace; max-width: 800px; margin: 40px auto; padding: 0 20px; background: #1e1e1e; color: #d4d4d4; }
+    h2 { color: #9cdcfe; }
+    label { display: block; margin: 12px 0 4px; color: #9cdcfe; }
+    input[type="file"] { color: #d4d4d4; }
+    button { margin-top: 16px; padding: 8px 20px; background: #0e639c; color: #fff; border: none; cursor: pointer; border-radius: 3px; font-size: 14px; }
+    button:disabled { background: #555; cursor: not-allowed; }
+    #log { margin-top: 24px; background: #252526; padding: 16px; border-radius: 4px; min-height: 120px; white-space: pre-wrap; font-size: 13px; line-height: 1.6; }
+    .status-PENDING       { color: #dcdcaa; }
+    .status-IN_PROGRESS   { color: #4ec9b0; }
+    .status-COMPLETED     { color: #6a9955; font-weight: bold; }
+    .status-FAILED        { color: #f44747; font-weight: bold; }
+    .step { color: #888; }
+    .ts  { color: #555; font-size: 11px; }
+    .err { color: #f44747; }
+  </style>
+</head>
+<body>
+  <h2>등기부등본 분석 SSE 테스트</h2>
+
+  <label>PDF 파일 선택</label>
+  <input type="file" id="pdfFile" accept=".pdf">
+
+  <button id="submitBtn" onclick="analyze()">분석 시작</button>
+
+  <div id="log">결과가 여기에 표시됩니다...</div>
+
+  <script>
+    const log = document.getElementById('log');
+    const btn = document.getElementById('submitBtn');
+
+    function appendLog(html) {
+      if (log.textContent === '결과가 여기에 표시됩니다...') log.innerHTML = '';
+      log.innerHTML += html + '\n';
+    }
+
+    async function analyze() {
+      const fileInput = document.getElementById('pdfFile');
+      if (!fileInput.files.length) {
+        alert('PDF 파일을 선택해주세요.');
+        return;
+      }
+
+      log.innerHTML = '';
+      btn.disabled = true;
+
+      const formData = new FormData();
+      formData.append('file', fileInput.files[0]);
+
+      try {
+        const res = await fetch('http://localhost:8080/api/deed/analyze', {
+          method: 'POST',
+          body: formData,
+        });
+
+        if (!res.ok) {
+          appendLog(`<span class="err">HTTP 오류: ${res.status} ${res.statusText}</span>`);
+          return;
+        }
+
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop();
+
+          for (const line of lines) {
+            if (!line.startsWith('data:')) continue;
+            const json = line.slice(5).trim();
+            if (!json) continue;
+
+            try {
+              const event = JSON.parse(json);
+              const ts = event.timestamp ? `<span class="ts"> [${event.timestamp.slice(11, 23)}]</span>` : '';
+              const step = event.step ? `<span class="step"> · ${event.step}</span>` : '';
+              appendLog(`<span class="status-${event.status}">[${event.status}]${step}</span>  ${event.message}${ts}`);
+
+              if (event.status === 'COMPLETED' || event.status === 'FAILED') {
+                reader.cancel();
+                break;
+              }
+            } catch {
+              appendLog(`<span class="err">파싱 오류: ${json}</span>`);
+            }
+          }
+        }
+      } catch (e) {
+        appendLog(`<span class="err">연결 오류: ${e.message}</span>`);
+      } finally {
+        btn.disabled = false;
+      }
+    }
+  </script>
+</body>
+</html>

@@ -11,13 +11,15 @@ Job 생성, PDF 검증/파싱, 비동기 실행, SSE 알림, 결과 저장을 �
 deed/
 ├── adapter/
 │   ├── inbound/web/
-│   │   ├── DeedInboundWebAdapter         # REST 컨트롤러 (POST /api/deed/analyze)
+│   │   ├── DeedInboundWebAdapter         # REST 컨트롤러 (POST /api/deed/analyze, GET /api/deed/jobs/{jobId})
 │   │   └── dto/
-│   │       └── DeedRequest               # 요청 DTO (Analyze: MultipartFile)
+│   │       ├── DeedRequest               # 요청 DTO (Analyze: MultipartFile)
+│   │       └── DeedResponse              # 응답 DTO (JobDetail: 분석 결과 포함)
 │   └── outbound/
 │       ├── PdfBoxParserAdapter           # PdfParserPort 구현체 (PDFBox로 PDF 파싱)
 │       ├── PdfValidationAdapter          # PdfValidationPort 구현체 (PDF 유효성 검증)
 │       ├── SseNotifierAdapter            # SseNotifierPort 구현체 (SSE Emitter 관리)
+│       ├── LlmAnalysisAdapter            # LlmAnalysisPort 구현체 (AI API HTTP 호출)
 │       └── persistence/
 │           ├── JobPersistenceAdapter     # JobPersistencePort 구현체 (JPA 저장/조회)
 │           └── jpa/
@@ -33,10 +35,11 @@ deed/
 │   │   │   └── command/
 │   │   │       └── DeedCommand           # UseCase 입력 커맨드 (Analyze)
 │   │   └── outbound/
-│   │       ├── JobPersistencePort        # Job CRUD 포트 (create/updateStatus/complete)
+│   │       ├── JobPersistencePort        # Job CRUD 포트 (create/findByJobId/updateStatus/complete)
 │   │       ├── SseNotifierPort           # SSE Emitter 발급 및 이벤트 전송 포트
 │   │       ├── PdfParserPort             # PDF 파싱 포트 (ByteArray → DeedSections)
-│   │       └── PdfValidationPort         # PDF 유효성 검증 포트 (ByteArray, contentType)
+│   │       ├── PdfValidationPort         # PDF 유효성 검증 포트 (ByteArray, contentType)
+│   │       └── LlmAnalysisPort           # LLM 분석 포트 (DeedSections → 분석 결과 JSON)
 │   ├── service/
 │   │   └── AnalysisAsyncProcessor        # AnalysisExecutorPort 구현체 (@Async 비동기 처리)
 │   └── usecase/
@@ -69,9 +72,10 @@ DeedInboundWebAdapter (POST /api/deed/analyze)
         2. PdfValidationPort.validate()      # PDF 유효성 검증
         3. PdfParserPort.parse()             # 섹션 파싱
         4. updateAndNotify(IN_PROGRESS, LLM_ANALYSIS)
-        5. updateAndNotify(IN_PROGRESS, POST_PROCESSING)
-        6. JobPersistencePort.complete()     # 결과 저장 (COMPLETED)
-        7. SseNotifierPort.notifyStep()      # COMPLETED 이벤트 전송
+        5. LlmAnalysisPort.analyze()         # AI API 호출 → 분석 결과 JSON 반환
+        6. updateAndNotify(IN_PROGRESS, POST_PROCESSING)
+        7. JobPersistencePort.complete()     # 결과 저장 (COMPLETED)
+        8. SseNotifierPort.notifyStep()      # COMPLETED 이벤트 전송
 ```
 
 분석 진행 상태: `PENDING → IN_PROGRESS (PDF_PARSING → LLM_ANALYSIS → POST_PROCESSING) → COMPLETED / FAILED`
@@ -84,8 +88,9 @@ DeedInboundWebAdapter (POST /api/deed/analyze)
 
 | 클래스 | 역할 |
 |--------|------|
-| `DeedInboundWebAdapter` | `POST /api/deed/analyze` 엔드포인트. `DeedRequest.Analyze`를 `DeedCommand.Analyze`로 변환해 UseCase 호출 |
+| `DeedInboundWebAdapter` | `POST /api/deed/analyze` (분석 시작), `GET /api/deed/jobs/{jobId}` (결과 조회) |
 | `DeedRequest` | 요청 DTO. `Analyze`: `MultipartFile` 포함 |
+| `DeedResponse` | 응답 DTO. `JobDetail`: 분석 Job 상태 및 결과(`@JsonRawValue` result) |
 
 ### adapter/outbound
 
@@ -94,6 +99,7 @@ DeedInboundWebAdapter (POST /api/deed/analyze)
 | `PdfBoxParserAdapter` | Apache PDFBox로 PDF 바이트를 파싱해 `DeedSections` 반환 |
 | `PdfValidationAdapter` | 바이트 배열 비어 있음 여부 및 `contentType == application/pdf` 검증 |
 | `SseNotifierAdapter` | `ConcurrentHashMap<jobId, SseEmitter>` 관리. Emitter 생성 및 이벤트 전송 (타임아웃 5분) |
+| `LlmAnalysisAdapter` | `RestTemplate`으로 AI API(`POST /api/deed/analyze`) 호출. `DeedSections` → 분석 결과 JSON String 반환 |
 | `JobPersistenceAdapter` | `AnalysisJobRepository`를 통해 Job 생성/상태 갱신/완료 처리 |
 | `AnalysisJobEntity` | `BaseEntity` 상속 JPA 엔티티 (jobId, fileName, fileSize, status, step, result, description) |
 | `AnalysisJobEntityMapper` | `AnalysisJobEntity` ↔ `AnalysisJob.Data` 변환 |
@@ -103,7 +109,7 @@ DeedInboundWebAdapter (POST /api/deed/analyze)
 
 | 인터페이스 | 역할 |
 |-----------|------|
-| `DeedUseCase` | `analyzeDeed(DeedCommand.Analyze): SseEmitter` |
+| `DeedUseCase` | `analyzeDeed(DeedCommand.Analyze): SseEmitter`, `getJob(jobId): AnalysisJob.Data` |
 | `AnalysisExecutorPort` | `execute(jobId, file)` — 비동기 분석 실행 진입점 |
 | `DeedCommand` | UseCase 입력 커맨드 객체. `Analyze(file, fileName, fileSize)` |
 
@@ -111,17 +117,18 @@ DeedInboundWebAdapter (POST /api/deed/analyze)
 
 | 인터페이스 | 역할 |
 |-----------|------|
-| `JobPersistencePort` | Job 생성(`create`), 상태 갱신(`updateStatus`), 완료(`complete`) |
+| `JobPersistencePort` | Job 생성(`create`), 단건 조회(`findByJobId`), 상태 갱신(`updateStatus`), 완료(`complete`) |
 | `SseNotifierPort` | Emitter 발급(`createEmitter`), 단계 이벤트 전송(`notifyStep`) |
 | `PdfParserPort` | `parse(ByteArray): DeedSections` |
 | `PdfValidationPort` | `validate(ByteArray, contentType?)` — 실패 시 `InvalidPdfException` |
+| `LlmAnalysisPort` | `analyze(DeedSections): String` — AI API 호출로 분석 결과 JSON 반환 |
 
 ### application/service & usecase
 
 | 클래스 | 역할 |
 |--------|------|
-| `AnalysisAsyncProcessor` | `@Async` 비동기 분석 실행. PDF 검증 → 파싱 → 상태 갱신 → SSE 알림 순서로 진행 |
-| `DeedUseCaseImpl` | Job 생성 후 SSE Emitter를 반환하고, 비동기 분석을 트리거 |
+| `AnalysisAsyncProcessor` | `@Async` 비동기 분석 실행. PDF 검증 → 파싱 → LLM 분석 → 상태 갱신 → SSE 알림 순서로 진행 |
+| `DeedUseCaseImpl` | Job 생성 + SSE 트리거(`analyzeDeed`), jobId로 Job 단건 조회(`getJob`) |
 
 ### domain
 

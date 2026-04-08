@@ -34,7 +34,9 @@ CREATE INDEX IF NOT EXISTS idx_sample_details_sample_id ON sample_details(sample
 CREATE INDEX IF NOT EXISTS idx_sample_details_detail_value ON sample_details(detail_value);
 CREATE INDEX IF NOT EXISTS idx_sample_details_deleted ON sample_details(is_deleted);
 
--- 분석 job 테이블
+-- 분석 job 테이블 (기존 테이블 컬럼 누락분 패치)
+ALTER TABLE IF EXISTS analysis_jobs ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN NOT NULL DEFAULT FALSE COMMENT '삭제 여부';
+
 CREATE TABLE IF NOT EXISTS analysis_jobs (
     id BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT 'ID',
     job_id VARCHAR(255) NOT NULL COMMENT '작업 ID(UUID)',
@@ -44,6 +46,7 @@ CREATE TABLE IF NOT EXISTS analysis_jobs (
     step VARCHAR(100) NULL COMMENT '현재 단계(예 : PDF_PARSING, LLM_ANALYSIS, POST_PROCESSING)',
     result TEXT NULL COMMENT '분석 결과 JSON',
     description TEXT NULL COMMENT '설명 (에러메시지 등)',
+    is_deleted BOOLEAN NOT NULL DEFAULT FALSE COMMENT '삭제 여부',
     created_id BIGINT NOT NULL COMMENT '생성자 ID',
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '생성 시간',
     updated_id BIGINT NULL COMMENT '수정자 ID',

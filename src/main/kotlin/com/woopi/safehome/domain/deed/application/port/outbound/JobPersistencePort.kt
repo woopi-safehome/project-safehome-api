@@ -8,6 +8,8 @@ interface JobPersistencePort {
 
     fun create(create: AnalysisJob.Create): AnalysisJob.Data
 
+    fun findByJobId(jobId: String): AnalysisJob.Data?
+
     fun updateStatus(
         jobId: String,
         status: JobStatus,
