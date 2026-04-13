@@ -14,12 +14,12 @@ spring:
   datasource:
     write:
       driver-class-name: org.h2.Driver
-      url: jdbc:h2:file:./h2db/db/application;MODE=MYSQL;DATABASE_TO_UPPER=false
+      url: jdbc:h2:file:./project-safehome-api/h2db/db/application;MODE=MYSQL;DATABASE_TO_UPPER=false
       username: sa
       password:
     read:
       driver-class-name: org.h2.Driver
-      url: jdbc:h2:file:./h2db/db/application;MODE=MYSQL;DATABASE_TO_UPPER=false;ACCESS_MODE_DATA=r
+      url: jdbc:h2:file:./project-safehome-api/h2db/db/application;MODE=MYSQL;DATABASE_TO_UPPER=false;ACCESS_MODE_DATA=r
       username: sa
       password:
     hikari:
