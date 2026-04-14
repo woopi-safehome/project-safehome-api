@@ -1,6 +1,6 @@
 # SafeHome API
 
-등기부등본 PDF 분석 서비스
+등기부등본 PDF 분석 서비스의 Spring Boot REST API 서버입니다.
 
 ## 기술 스택
 
@@ -56,7 +56,7 @@ src/main/kotlin/com/woopi/safehome/
 │       ├── domain/service/           # Domain Service
 │       └── model/                    # Domain Model
 └── global/
-    ├── config/                       # Spring 설정
+    ├── config/                       # Spring 설정 (CORS, Async, JPA 등)
     ├── datasource/                   # Read/Write DataSource 라우팅
     ├── enums/                        # JobStatus, AnalysisStep
     ├── exception/                    # ErrorCode, BusinessException, GlobalExceptionHandler
@@ -68,11 +68,58 @@ src/main/kotlin/com/woopi/safehome/
 
 | Method | Path | 설명 |
 |--------|------|------|
-| POST | `/api/deed/analyze` | 등기부등본 PDF 분석 (SSE 응답) |
-| POST | `/api/job/id` | Job UUID 생성 |
-| GET | `/api/sample` | 샘플 목록 조회 |
-| GET | `/api/sample/details/{id}` | 샘플 상세 조회 |
-| POST | `/api/sample/pdf/parse` | PDF 텍스트 추출 |
+| POST | `/api/deed/analyze` | 등기부등본 PDF 업로드 및 분석 시작 (SSE 스트리밍 응답) |
+| GET | `/api/deed/jobs/{jobId}` | 분석 Job 상태 및 결과 조회 |
+
+### POST /api/deed/analyze
+
+- Content-Type: `multipart/form-data`
+- 응답: `text/event-stream` (SSE)
+- 분석 진행 단계마다 SSE 이벤트 전송
+
+**SSE 이벤트 형식**
+
+```json
+{
+  "jobId": "uuid",
+  "status": "PENDING | IN_PROGRESS | COMPLETED | FAILED",
+  "step": "PDF_PARSING | LLM_ANALYSIS | POST_PROCESSING | null",
+  "message": "진행 상태 메시지",
+  "timestamp": "2026-04-15T10:00:00"
+}
+```
+
+**분석 단계 흐름**
+
+```
+PENDING         → 분석 작업이 시작되었습니다.
+IN_PROGRESS     → 첨부된 파일을 분석중이에요  (PDF_PARSING)
+IN_PROGRESS     → AI가 등본을 분석중이에요    (LLM_ANALYSIS)
+IN_PROGRESS     → 분석한 내용을 정리중이에요  (POST_PROCESSING)
+COMPLETED       → 완료 됐습니다!
+FAILED          → 오류 메시지                 (각 단계에서 발생 가능)
+```
+
+### GET /api/deed/jobs/{jobId}
+
+**응답 예시**
+
+```json
+{
+  "type": "success",
+  "data": {
+    "jobId": "uuid",
+    "fileName": "등기부등본.pdf",
+    "fileSize": 102400,
+    "status": "COMPLETED",
+    "step": "POST_PROCESSING",
+    "description": null,
+    "result": "{\"isValidDeed\":true,\"safetyLevel\":\"SAFE\",...}"
+  }
+}
+```
+
+> `result`는 분석 결과 JSON을 문자열로 직렬화한 값입니다. 클라이언트에서 `JSON.parse()`하여 사용합니다.
 
 ## 설정 파일
 
@@ -80,10 +127,17 @@ src/main/kotlin/com/woopi/safehome/
 |------|------|
 | `application.yml` | 기본 설정 |
 | `application-db.yml` | DB 설정 (H2, Read/Write 분리, HikariCP) |
-| `application-swagger.yml` | OpenAPI 설정 (local/dev만 활성) |
-| `application-websocket.yml` | WebSocket 설정 |
+| `application-swagger.yml` | OpenAPI 설정 |
+| `application-ai.yml` | AI API URL 설정 (`safehome.ai-api.url`) |
 
-## 실행
+## 로컬 실행
+
+### 사전 조건
+
+- JDK 21
+- AI API 서버(`project-safehome-ai-api`)가 `http://localhost:5000`에서 실행 중이어야 합니다.
+
+### 실행
 
 ```bash
 ./gradlew bootRun
@@ -91,6 +145,22 @@ src/main/kotlin/com/woopi/safehome/
 
 - Swagger UI: http://localhost:8080/swagger-ui.html
 - H2 Console: http://localhost:8080/h2-console
+
+### 전체 실행 순서
+
+```bash
+# 1. AI API 먼저 시작 (필수)
+cd project-safehome-ai-api && python app.py
+
+# 2. API 서버 시작
+cd project-safehome-api && ./gradlew bootRun
+```
+
+AI API 없이 API 서버만 시작하면 LLM 분석 단계에서 `FAILED` 이벤트가 발생합니다.
+
+### CORS
+
+웹 브라우저 클라이언트(`localhost:8081`)에서 호출 가능하도록 CORS가 설정되어 있습니다 (`global/config/AsyncConfig.kt`).
 
 ## 테스트
 
