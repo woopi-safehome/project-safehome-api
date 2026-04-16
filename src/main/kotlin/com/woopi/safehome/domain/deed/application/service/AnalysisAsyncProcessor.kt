@@ -61,8 +61,12 @@ class AnalysisAsyncProcessor(
         // 3. 후처리
         updateAndNotify(JobStatus.IN_PROGRESS, AnalysisStep.POST_PROCESSING, "분석한 내용을 정리중이에요")
 
-        jobPersistencePort.complete(jobId, analysisResult)
-
-        sseNotifierPort.notifyStep(jobId, JobStatus.COMPLETED, AnalysisStep.POST_PROCESSING, "완료 됐습니다!")
+        try {
+            jobPersistencePort.complete(jobId, analysisResult)
+            sseNotifierPort.notifyStep(jobId, JobStatus.COMPLETED, AnalysisStep.POST_PROCESSING, "완료 됐습니다!")
+        } catch (e: Exception) {
+            log.error("[POST_PROCESSING] 완료 처리 실패. jobId={}", jobId, e)
+            updateAndNotify(JobStatus.FAILED, AnalysisStep.POST_PROCESSING, "결과 저장 중 오류가 발생했습니다")
+        }
     }
 }

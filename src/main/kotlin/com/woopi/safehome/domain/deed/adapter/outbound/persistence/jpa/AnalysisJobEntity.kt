@@ -26,7 +26,7 @@ class AnalysisJobEntity(
     @Enumerated(EnumType.STRING)
     var step: AnalysisStep? = null,
 
-    @Column(name = "result")
+    @Column(name = "result", columnDefinition = "TEXT")
     var result: String? = null,
 
     @Column(name = "description")
