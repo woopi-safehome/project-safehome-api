@@ -37,6 +37,7 @@ class DeedInboundWebAdapter(
             file = request.file,
             fileName = request.file.originalFilename ?: "unknown.pdf",
             fileSize = request.file.size,
+            leaseType = request.leaseType,
         )
         return deedUseCase.analyzeDeed(command)
     }

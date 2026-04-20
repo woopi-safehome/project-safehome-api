@@ -9,6 +9,8 @@ object DeedRequest {
     data class Analyze(
         @Schema(description = "등기부등본 PDF 파일")
         @NotNull
-        val file: MultipartFile
+        val file: MultipartFile,
+        @Schema(description = "임대차 유형 (전세 / 월세)", allowableValues = ["전세", "월세"])
+        val leaseType: String? = null,
     )
 }

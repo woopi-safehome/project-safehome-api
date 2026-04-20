@@ -20,15 +20,20 @@ class LlmAnalysisAdapter(
     private val log = LoggerFactory.getLogger(LlmAnalysisAdapter::class.java)
     private val restClient = RestClient.builder().baseUrl(aiApiUrl).build()
 
-    override fun analyze(sections: DeedSections): String {
+    override fun analyze(sections: DeedSections, leaseType: String?): String {
         val totalLines = sections.sections.values.sumOf { it.size }
-        log.info("[LLM_ANALYSIS] 요청. sections={}, totalLines={}", sections.sectionNames(), totalLines)
+        log.info("[LLM_ANALYSIS] 요청. sections={}, totalLines={}, leaseType={}", sections.sectionNames(), totalLines, leaseType)
+
+        val requestBody = buildMap {
+            put("sections", sections.sections)
+            if (leaseType != null) put("leaseType", leaseType)
+        }
 
         @Suppress("UNCHECKED_CAST")
         val response = restClient.post()
             .uri("/api/deed/analyze")
             .contentType(MediaType.APPLICATION_JSON)
-            .body(mapOf("sections" to sections.sections))
+            .body(requestBody)
             .retrieve()
             .onStatus(HttpStatusCode::isError) { _, res ->
                 val errorBody = res.body.bufferedReader().readText()

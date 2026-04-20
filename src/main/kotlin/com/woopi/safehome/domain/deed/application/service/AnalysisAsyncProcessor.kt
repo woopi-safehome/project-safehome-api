@@ -26,7 +26,7 @@ class AnalysisAsyncProcessor(
     private val log = LoggerFactory.getLogger(AnalysisAsyncProcessor::class.java)
 
     @Async
-    override fun execute(jobId: String, file: MultipartFile) {
+    override fun execute(jobId: String, file: MultipartFile, leaseType: String?) {
 
         fun updateAndNotify(status: JobStatus, step: AnalysisStep, message: String) {
             jobPersistencePort.updateStatus(jobId, status, step, message)
@@ -51,7 +51,7 @@ class AnalysisAsyncProcessor(
         updateAndNotify(JobStatus.IN_PROGRESS, AnalysisStep.LLM_ANALYSIS, "AI가 등본을 분석중이에요")
 
         val analysisResult = try {
-            llmAnalysisPort.analyze(sections)
+            llmAnalysisPort.analyze(sections, leaseType)
         } catch (e: Exception) {
             log.error("[LLM_ANALYSIS] 분석 실패. jobId={}", jobId, e)
             updateAndNotify(JobStatus.FAILED, AnalysisStep.LLM_ANALYSIS, "AI 분석 중 오류가 발생했습니다")

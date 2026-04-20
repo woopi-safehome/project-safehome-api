@@ -40,7 +40,7 @@ class DeedUseCaseImpl(
 
         sseNotifierPort.notifyStep(jobId, JobStatus.PENDING, null, "분석 작업이 시작되었습니다.")
 
-        analysisExecutorPort.execute(jobId, command.file)
+        analysisExecutorPort.execute(jobId, command.file, command.leaseType)
 
         return emitter
     }
