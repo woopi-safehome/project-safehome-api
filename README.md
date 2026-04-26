@@ -10,7 +10,8 @@
 | Spring Boot | 3.5.8 |
 | JDK | 21 |
 | Gradle | Kotlin DSL |
-| H2 Database | MySQL 호환 모드 |
+| H2 Database | MySQL 호환 모드 (로컬) |
+| PostgreSQL | (개발/운영) |
 | Apache PDFBox | 3.0.3 |
 | SpringDoc OpenAPI | 2.8.9 |
 | Kotest | 5.9.1 |
@@ -130,23 +131,18 @@ FAILED          → 오류 메시지                 (각 단계에서 발생 �
 | `application-swagger.yml` | OpenAPI 설정 |
 | `application-ai.yml` | AI API URL 설정 (`safehome.ai-api.url`) |
 
-## 로컬 실행
+## 환경별 실행 가이드
 
-### 사전 조건
+### 로컬 (Local)
+
+개발자 개인 PC 환경입니다. H2 인메모리 DB를 사용하여 별도 설치 없이 바로 실행 가능합니다.
+
+**사전 조건**
 
 - JDK 21
 - AI API 서버(`project-safehome-ai-api`)가 `http://localhost:5000`에서 실행 중이어야 합니다.
 
-### 실행
-
-```bash
-./gradlew bootRun
-```
-
-- Swagger UI: http://localhost:8080/swagger-ui.html
-- H2 Console: http://localhost:8080/h2-console
-
-### 전체 실행 순서
+**실행 순서**
 
 ```bash
 # 1. AI API 먼저 시작 (필수)
@@ -158,9 +154,85 @@ cd project-safehome-api && ./gradlew bootRun
 
 AI API 없이 API 서버만 시작하면 LLM 분석 단계에서 `FAILED` 이벤트가 발생합니다.
 
-### CORS
+- Swagger UI: http://localhost:8080/swagger-ui.html
+- H2 Console: http://localhost:8080/h2-console
+
+**CORS**
 
 웹 브라우저 클라이언트(`localhost:8081`)에서 호출 가능하도록 CORS가 설정되어 있습니다 (`global/config/AsyncConfig.kt`).
+
+---
+
+### 개발 서버 (Dev)
+
+홈 서버(Ubuntu, 미니 PC)에서 운영하는 개발/테스트 환경입니다.
+
+**DB 구성: PostgreSQL Primary + Replica (Docker)**
+
+| 역할 | 컨테이너 | 포트 |
+|------|----------|------|
+| Primary (쓰기) | `safehome-dev-primary` | `127.0.0.1:5432` |
+| Replica (읽기) | `safehome-dev-replica` | `127.0.0.1:5433` |
+
+> **PostgreSQL을 선택한 이유**
+>
+> - AI 분석 결과를 JSON으로 저장하는 구조에서 `jsonb` 타입의 인덱싱·쿼리 지원이 강력함
+> - H2와 SQL 문법 차이가 적어 마이그레이션 부담이 낮음
+> - 완전 오픈소스(BSD 라이선스)로 Oracle 의존성 없음
+> - Spring Boot + JPA 환경에서 dialect 설정만으로 전환 가능
+
+**DB 실행**
+
+```bash
+cd docker/dev
+
+# .env.template을 복사하여 비밀번호 설정
+cp .env.template .env
+
+# 컨테이너 시작
+docker compose up -d
+```
+
+**API 서버 실행**
+
+```bash
+./gradlew bootRun --args='--spring.profiles.active=dev'
+```
+
+**Docker 구성 파일 위치:** `docker/dev/`
+
+---
+
+### 운영 (Production)
+
+**DB 구성: PostgreSQL Primary + Replica + 백업 (Docker)**
+
+| 역할 | 컨테이너 | 포트 |
+|------|----------|------|
+| Primary (쓰기) | `safehome-prod-primary` | `127.0.0.1:5432` |
+| Replica (읽기) | `safehome-prod-replica` | `127.0.0.1:5433` |
+
+**DB 실행**
+
+```bash
+cd docker/prod
+cp .env.template .env
+docker compose up -d
+```
+
+**백업**
+
+```bash
+# 수동 실행 또는 crontab 등록
+bash docker/prod/backup/backup.sh
+
+# crontab 예시 (매일 새벽 2시)
+0 2 * * * /path/to/docker/prod/backup/backup.sh
+```
+
+기본 보관 기간: 7일 (`.env`의 `BACKUP_RETENTION_DAYS`로 조정)
+
+**Docker 구성 파일 위치:** `docker/prod/`
 
 ## 테스트
 
