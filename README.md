@@ -165,14 +165,15 @@ AI API 없이 API 서버만 시작하면 LLM 분석 단계에서 `FAILED` 이벤
 
 ### 개발 서버 (Dev)
 
-홈 서버(Ubuntu, 미니 PC)에서 운영하는 개발/테스트 환경입니다.
+홈 서버(Ubuntu, 미니 PC)에서 운영하는 개발/테스트 환경입니다. API 서버는 Docker 컨테이너로 배포되며 CI/CD는 GitHub Actions가 담당합니다.
 
-**DB 구성: PostgreSQL Primary + Replica (Docker)**
+**구성 요소**
 
-| 역할 | 컨테이너 | 포트 |
-|------|----------|------|
-| Primary (쓰기) | `safehome-dev-primary` | `127.0.0.1:5432` |
-| Replica (읽기) | `safehome-dev-replica` | `127.0.0.1:5433` |
+| 컨테이너 | 역할 | 포트 |
+|----------|------|------|
+| `safehome-api-dev` | Spring Boot API | `127.0.0.1:8080` |
+| `safehome-dev-primary` | PostgreSQL Primary (쓰기) | `127.0.0.1:5432` |
+| `safehome-dev-replica` | PostgreSQL Replica (읽기) | `127.0.0.1:5433` |
 
 > **PostgreSQL을 선택한 이유**
 >
@@ -181,22 +182,10 @@ AI API 없이 API 서버만 시작하면 LLM 분석 단계에서 `FAILED` 이벤
 > - 완전 오픈소스(BSD 라이선스)로 Oracle 의존성 없음
 > - Spring Boot + JPA 환경에서 dialect 설정만으로 전환 가능
 
-**DB 실행**
+**환경변수 파일 위치 (서버)**
 
-```bash
-cd docker/dev
-
-# .env.template을 복사하여 비밀번호 설정
-cp .env.template .env
-
-# 컨테이너 시작
-docker compose up -d
 ```
-
-**API 서버 실행**
-
-```bash
-./gradlew bootRun --args='--spring.profiles.active=dev'
+/home/woopi/project/safehome/env/.env_api
 ```
 
 **Docker 구성 파일 위치:** `docker/dev/`
@@ -233,6 +222,110 @@ bash docker/prod/backup/backup.sh
 기본 보관 기간: 7일 (`.env`의 `BACKUP_RETENTION_DAYS`로 조정)
 
 **Docker 구성 파일 위치:** `docker/prod/`
+
+## CI/CD
+
+### 개요
+
+`develop` 브랜치에 push하면 GitHub Actions가 자동으로 빌드 → 이미지 배포를 수행합니다.
+
+```
+로컬 push
+  → GitHub Actions (빌드 + 이미지 생성)
+    → ghcr.io (이미지 저장)
+      → 개발 서버 (이미지 pull + 컨테이너 교체)
+```
+
+### 사용 기술
+
+| 항목 | 내용 |
+|------|------|
+| CI/CD | GitHub Actions |
+| 이미지 레지스트리 | GitHub Container Registry (ghcr.io) |
+| 배포 방식 | SSH → docker compose pull & up |
+| 워크플로우 파일 | `.github/workflows/deploy-api-dev.yml` |
+
+### 트리거 조건
+
+```yaml
+on:
+  push:
+    branches: [develop]
+    paths:
+      - 'project-safehome-api/**'
+```
+
+`project-safehome-api/` 하위 파일이 변경된 push에만 실행됩니다.
+
+### 배포 흐름
+
+| 단계 | 위치 | 내용 |
+|------|------|------|
+| 1. 코드 push | 로컬 → GitHub | `git push origin develop` |
+| 2. 이미지 빌드 | GitHub Actions 러너 | Dockerfile 멀티스테이지 빌드 (JDK21 → JRE21) |
+| 3. 이미지 push | 러너 → ghcr.io | `ghcr.io/<owner>/safehome-api` |
+| 4. SSH 접속 | 러너 → 개발 서버 | `appleboy/ssh-action` |
+| 5. 이미지 pull | 개발 서버 → ghcr.io | `docker compose pull safehome-api` |
+| 6. 컨테이너 교체 | 개발 서버 | `docker compose up -d --no-deps safehome-api` |
+| 7. Spring Boot 기동 | 개발 서버 | `/actuator/health` healthcheck 통과 시 완료 |
+
+### 이미지 태그 전략
+
+```
+ghcr.io/<owner>/safehome-api:dev           ← 항상 최신 develop
+ghcr.io/<owner>/safehome-api:dev-previous  ← 직전 버전 (롤백용)
+```
+
+용량 절약을 위해 태그 2개만 유지합니다. (무료 계정 ghcr.io 한도 500MB)
+
+### 롤백
+
+문제 발생 시 서버에서:
+
+```bash
+cd /home/woopi/project/safehome
+
+sed -i 's/:dev$/:dev-previous/' docker-compose.yml
+docker compose up -d --no-deps safehome-api
+
+# 확인 후 원복
+sed -i 's/:dev-previous$/:dev/' docker-compose.yml
+```
+
+### GitHub Secrets 설정
+
+레포 → Settings → Environments → dev → Environment secrets
+
+| Secret | 값 |
+|--------|----|
+| `DEV_SSH_HOST` | 개발 서버 IP |
+| `DEV_SSH_USER` | |
+| `DEV_SSH_PRIVATE_KEY` | SSH 개인키 전체 내용 |
+| `DEV_SSH_PORT` | |
+
+### 서버 사전 준비 (최초 1회)
+
+```bash
+# 1. Docker 네트워크 생성 (서비스 간 통신용 공유 네트워크)
+docker network create safehome-net
+
+# 2. 환경변수 파일 작성
+mkdir -p /home/woopi/project/safehome/env
+cp docker/dev/.env.template /home/woopi/project/safehome/env/.env_api
+nano /home/woopi/project/safehome/env/.env_api
+# GITHUB_OWNER, POSTGRES_PASSWORD 등 실제 값으로 수정
+
+# 3. GitHub Actions용 SSH 키 생성
+ssh-keygen -t ed25519 -f ~/.ssh/github_actions -N ""
+cat ~/.ssh/github_actions.pub >> ~/.ssh/authorized_keys
+chmod 600 ~/.ssh/authorized_keys
+
+# 4. DB 컨테이너 최초 기동 (API 컨테이너는 워크플로우가 기동)
+cd /home/woopi/project/safehome
+docker compose -f docker/dev/docker-compose.yml up -d postgres-primary postgres-replica
+```
+
+---
 
 ## 테스트
 

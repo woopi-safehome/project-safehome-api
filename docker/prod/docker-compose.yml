@@ -1,0 +1,64 @@
+services:
+  postgres-primary:
+    image: postgres:17
+    container_name: safehome-prod-primary
+    env_file: .env
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres-primary-data:/var/lib/postgresql/data
+      - ./init/init-primary.sh:/docker-entrypoint-initdb.d/init-primary.sh
+      - backup-data:/backups
+    ports:
+      - "127.0.0.1:5432:5432"
+    networks:
+      - postgres-net
+      - safehome-net
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  postgres-replica:
+    image: postgres:17
+    container_name: safehome-prod-replica
+    env_file: .env
+    volumes:
+      - postgres-replica-data:/var/lib/postgresql/data
+      - ./init/init-replica.sh:/init-replica.sh
+    ports:
+      - "127.0.0.1:5433:5432"
+    networks:
+      - postgres-net
+      - safehome-net
+    depends_on:
+      postgres-primary:
+        condition: service_healthy
+    command: >
+      bash -c "
+        if [ ! -f /var/lib/postgresql/data/PG_VERSION ]; then
+          bash /init-replica.sh
+        fi
+        exec docker-entrypoint.sh postgres
+      "
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres-primary-data:
+  postgres-replica-data:
+  backup-data:
+
+networks:
+  postgres-net:
+    driver: bridge
+  safehome-net:
+    external: true

@@ -47,3 +47,6 @@ CLAUDE.md
 ### Project ###
 project-safehome-ai-api
 project-safehome-app
+
+### Secrets ###
+docker/**/.env

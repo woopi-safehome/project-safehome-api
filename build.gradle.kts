@@ -48,8 +48,11 @@ dependencies {
 	// Swagger
 	implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:$springdocVersion")
 
-	// h2 database
+	// h2 database (로컬)
 	runtimeOnly("com.h2database:h2")
+
+	// PostgreSQL (개발/운영)
+	runtimeOnly("org.postgresql:postgresql")
 
 	// Redis, (embedded redis - 로깅 충돌을 일으킬 수 있는 의존성 제외)
 	implementation("org.springframework.boot:spring-boot-starter-data-redis")
