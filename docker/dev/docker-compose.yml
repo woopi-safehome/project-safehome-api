@@ -11,7 +11,7 @@ services:
       DB_WRITE_HOST: postgres-primary
       DB_READ_HOST: postgres-replica
     ports:
-      - "127.0.0.1:8080:8080"
+      - "8080:8080"
     networks:
       - postgres-net
       - safehome-net
