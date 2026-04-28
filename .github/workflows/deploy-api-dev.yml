@@ -11,7 +11,7 @@ on:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository_owner }}/safehome-api
-  DEPLOY_PATH: /home/woopi/project/safehome
+  DEPLOY_PATH: /home/woopi/project/safehome/api
 
 jobs:
   build-and-push:
