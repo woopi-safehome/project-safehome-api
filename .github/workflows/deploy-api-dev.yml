@@ -92,6 +92,7 @@ jobs:
             echo "${{ secrets.GITHUB_TOKEN }}" | \
               docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
+            docker compose --env-file /home/woopi/project/safehome/env/.env_api up -d postgres-primary postgres-replica
             docker compose --env-file /home/woopi/project/safehome/env/.env_api pull safehome-api
             docker compose --env-file /home/woopi/project/safehome/env/.env_api up -d --no-deps safehome-api
 
