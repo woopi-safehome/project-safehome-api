@@ -10,6 +10,7 @@ services:
       DB_PASSWORD: ${POSTGRES_PASSWORD}
       DB_WRITE_HOST: postgres-primary
       DB_READ_HOST: postgres-replica
+      AI_API_URL: http://safehome-ai-api-dev:5000
     ports:
       - "8080:8080"
     networks:
