@@ -11,6 +11,8 @@ import com.woopi.safehome.global.exception.BusinessException
 import com.woopi.safehome.global.exception.ErrorCode
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import org.springframework.transaction.support.TransactionSynchronization
+import org.springframework.transaction.support.TransactionSynchronizationManager
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter
 import java.util.*
 
@@ -40,7 +42,11 @@ class DeedUseCaseImpl(
 
         sseNotifierPort.notifyStep(jobId, JobStatus.PENDING, null, "분석 작업이 시작되었습니다.")
 
-        analysisExecutorPort.execute(jobId, command.file, command.leaseType)
+        TransactionSynchronizationManager.registerSynchronization(object : TransactionSynchronization {
+            override fun afterCommit() {
+                analysisExecutorPort.execute(jobId, command.file, command.leaseType)
+            }
+        })
 
         return emitter
     }
