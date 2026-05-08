@@ -9,6 +9,7 @@ import com.woopi.safehome.domain.deed.application.port.outbound.SseNotifierPort
 import com.woopi.safehome.domain.deed.domain.exception.InvalidPdfException
 import com.woopi.safehome.global.enums.AnalysisStep
 import com.woopi.safehome.global.enums.JobStatus
+import io.sentry.Sentry
 import org.slf4j.LoggerFactory
 import org.springframework.scheduling.annotation.Async
 import org.springframework.stereotype.Service
@@ -54,6 +55,11 @@ class AnalysisAsyncProcessor(
             llmAnalysisPort.analyze(sections, leaseType)
         } catch (e: Exception) {
             log.error("[LLM_ANALYSIS] 분석 실패. jobId={}", jobId, e)
+            Sentry.withScope { scope ->
+                scope.setTag("jobId", jobId)
+                scope.setTag("step", AnalysisStep.LLM_ANALYSIS.name)
+                Sentry.captureException(e)
+            }
             updateAndNotify(JobStatus.FAILED, AnalysisStep.LLM_ANALYSIS, "AI 분석 중 오류가 발생했습니다")
             return
         }
@@ -66,6 +72,11 @@ class AnalysisAsyncProcessor(
             sseNotifierPort.notifyStep(jobId, JobStatus.COMPLETED, AnalysisStep.POST_PROCESSING, "완료 됐습니다!")
         } catch (e: Exception) {
             log.error("[POST_PROCESSING] 완료 처리 실패. jobId={}", jobId, e)
+            Sentry.withScope { scope ->
+                scope.setTag("jobId", jobId)
+                scope.setTag("step", AnalysisStep.POST_PROCESSING.name)
+                Sentry.captureException(e)
+            }
             updateAndNotify(JobStatus.FAILED, AnalysisStep.POST_PROCESSING, "결과 저장 중 오류가 발생했습니다")
         }
     }
