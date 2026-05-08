@@ -3,6 +3,7 @@ package com.woopi.safehome.global.exception.handler
 import com.woopi.safehome.global.exception.BusinessException
 import com.woopi.safehome.global.exception.ErrorCode
 import com.woopi.safehome.global.response.ApiResponse
+import io.sentry.Sentry
 import jakarta.validation.ConstraintViolationException
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.MethodArgumentNotValidException
@@ -12,17 +13,14 @@ import org.springframework.web.bind.annotation.ExceptionHandler
 @ControllerAdvice
 class GlobalExceptionHandler {
 
-    /**
-     * BusinessException 처리
-     */
     @ExceptionHandler(BusinessException::class)
     fun handleBusinessException(e: BusinessException): ResponseEntity<ApiResponse<Nothing?>> {
+        if (e.errorCode.httpStatus.is5xxServerError) {
+            Sentry.captureException(e)
+        }
         return createErrorResponse(e.errorCode, e.details)
     }
 
-    /**
-     * DTO @Valid 검증 실패 (RequestBody)
-     */
     @ExceptionHandler(MethodArgumentNotValidException::class)
     fun handleValidationException(ex: MethodArgumentNotValidException): ResponseEntity<ApiResponse<Nothing?>> {
         val errorDetails = ex.bindingResult.fieldErrors.associate { fieldError ->
@@ -32,9 +30,6 @@ class GlobalExceptionHandler {
         return createErrorResponse(ErrorCode.VALIDATION_FAILED, errorDetails)
     }
 
-    /**
-     * 파라미터 제약조건 실패 (RequestParam, PathVariable)
-     */
     @ExceptionHandler(ConstraintViolationException::class)
     fun handleConstraintViolation(ex: ConstraintViolationException): ResponseEntity<ApiResponse<Nothing?>> {
         val errorDetails = ex.constraintViolations.associate { violation ->
@@ -44,11 +39,9 @@ class GlobalExceptionHandler {
         return createErrorResponse(ErrorCode.CONSTRAINT_VIOLATION, errorDetails)
     }
 
-    /**
-     * 일반적인 Exception 처리
-     */
     @ExceptionHandler(Exception::class)
     fun handleGenericException(ex: Exception): ResponseEntity<ApiResponse<Nothing?>> {
+        Sentry.captureException(ex)
         return createErrorResponse(ErrorCode.INTERNAL_SERVER_ERROR, ex.localizedMessage)
     }
 

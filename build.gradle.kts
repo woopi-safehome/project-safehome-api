@@ -4,6 +4,7 @@ plugins {
 	id("org.springframework.boot") version "3.5.8"
 	id("io.spring.dependency-management") version "1.1.7"
 	kotlin("plugin.jpa") version "2.1.0"
+	id("io.sentry.jvm.gradle") version "6.6.0"
 }
 
 group = "com.woopi"
@@ -31,6 +32,8 @@ val coroutineReactorVersion = "1.10.2"
 val embeddedRedisVersion = "0.7.3"
 
 val pdfBoxVersion = "3.0.3"
+
+val sentryVersion = "7.14.0"
 
 dependencies {
 	implementation("org.springframework.boot:spring-boot-starter-data-jpa")
@@ -67,6 +70,9 @@ dependencies {
 	// PDFBox
 	implementation("org.apache.pdfbox:pdfbox:$pdfBoxVersion")
 
+	// Sentry
+	implementation("io.sentry:sentry-spring-boot-starter-jakarta:$sentryVersion")
+
 	// kotest
 	testImplementation(platform("io.kotest:kotest-bom:$kotestVersion"))
 	testImplementation("io.kotest:kotest-framework-engine")
@@ -98,5 +104,12 @@ springBoot {
 
 tasks.withType<Test> {
 	useJUnitPlatform()
+}
+
+sentry {
+	includeSourceContext.set(true)
+	org.set("woopii")
+	projectName.set("java-spring-boot")
+	authToken.set(System.getenv("SENTRY_AUTH_TOKEN"))
 }
 

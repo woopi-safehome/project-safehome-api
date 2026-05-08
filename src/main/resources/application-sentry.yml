@@ -1,0 +1,5 @@
+sentry:
+  dsn: ${SENTRY_DSN:https://e2e30023cdc80c0184f0082c9223f077@o4511314691555328.ingest.us.sentry.io/4511354572832768}
+  traces-sample-rate: 1.0
+  environment: ${SPRING_PROFILES_ACTIVE:local}
+  send-default-pii: false

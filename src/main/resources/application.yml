@@ -9,3 +9,4 @@ spring:
       - classpath:application-websocket.yml
       - classpath:application-logging.yml
       - classpath:application-ai.yml
+      - classpath:application-sentry.yml
