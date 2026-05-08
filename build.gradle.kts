@@ -109,7 +109,7 @@ tasks.withType<Test> {
 sentry {
 	includeSourceContext.set(true)
 	org.set("woopii")
-	projectName.set("java-spring-boot")
+	projectName.set("safehome-api")
 	authToken.set(System.getenv("SENTRY_AUTH_TOKEN"))
 }
 
