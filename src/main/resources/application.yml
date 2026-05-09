@@ -1,15 +1,6 @@
 spring:
   application:
     name: safehome
-
-management:
-  endpoints:
-    web:
-      exposure:
-        include: health
-  endpoint:
-    health:
-      show-details: never
   config:
     import:
       - classpath:application-db.yml
@@ -19,3 +10,12 @@ management:
       - classpath:application-logging.yml
       - classpath:application-ai.yml
       - classpath:application-sentry.yml
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
