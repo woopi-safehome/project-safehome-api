@@ -5,6 +5,7 @@ services:
     env_file: /home/woopi/project/safehome/env/.env_api
     environment:
       SPRING_PROFILES_ACTIVE: dev
+      TZ: Asia/Seoul
       DB_NAME: ${POSTGRES_DB}
       DB_USERNAME: ${POSTGRES_USER}
       DB_PASSWORD: ${POSTGRES_PASSWORD}
@@ -35,6 +36,7 @@ services:
     container_name: safehome-dev-primary
     env_file: /home/woopi/project/safehome/env/.env_api
     environment:
+      TZ: Asia/Seoul
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -57,6 +59,8 @@ services:
     image: postgres:17
     container_name: safehome-dev-replica
     env_file: /home/woopi/project/safehome/env/.env_api
+    environment:
+      TZ: Asia/Seoul
     volumes:
       - postgres-replica-data:/var/lib/postgresql/data
       - ./init/init-replica.sh:/init-replica.sh
@@ -85,6 +89,8 @@ services:
   safehome-redis:
     image: redis:7-alpine
     container_name: safehome-dev-redis
+    environment:
+      TZ: Asia/Seoul
     command: redis-server --save 60 1 --loglevel warning --maxmemory 2gb --maxmemory-policy allkeys-lru
     volumes:
       - redis-data:/data
