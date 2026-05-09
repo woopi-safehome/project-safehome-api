@@ -3,10 +3,12 @@ package com.woopi.safehome.domain.deed.application.service
 import com.woopi.safehome.domain.deed.application.port.inbound.AnalysisExecutorPort
 import com.woopi.safehome.domain.deed.application.port.outbound.JobPersistencePort
 import com.woopi.safehome.domain.deed.application.port.outbound.LlmAnalysisPort
+import com.woopi.safehome.domain.deed.application.port.outbound.LlmCachePort
 import com.woopi.safehome.domain.deed.application.port.outbound.PdfParserPort
 import com.woopi.safehome.domain.deed.application.port.outbound.PdfValidationPort
 import com.woopi.safehome.domain.deed.application.port.outbound.SseNotifierPort
 import com.woopi.safehome.domain.deed.domain.exception.InvalidPdfException
+import com.woopi.safehome.domain.deed.domain.model.DeedSections
 import com.woopi.safehome.global.enums.AnalysisStep
 import com.woopi.safehome.global.enums.JobStatus
 import io.sentry.Sentry
@@ -14,6 +16,7 @@ import org.slf4j.LoggerFactory
 import org.springframework.scheduling.annotation.Async
 import org.springframework.stereotype.Service
 import org.springframework.web.multipart.MultipartFile
+import java.security.MessageDigest
 
 @Service
 class AnalysisAsyncProcessor(
@@ -22,6 +25,7 @@ class AnalysisAsyncProcessor(
     private val pdfValidationPort: PdfValidationPort,
     private val pdfParserPort: PdfParserPort,
     private val llmAnalysisPort: LlmAnalysisPort,
+    private val llmCachePort: LlmCachePort,
 ) : AnalysisExecutorPort {
 
     private val log = LoggerFactory.getLogger(AnalysisAsyncProcessor::class.java)
@@ -48,11 +52,21 @@ class AnalysisAsyncProcessor(
 
         log.info("[PDF_PARSING] jobId={}, sections={}", jobId, sections)
 
-        // 2. LLM 분석
+        // 2. LLM 분석 (캐시 우선)
         updateAndNotify(JobStatus.IN_PROGRESS, AnalysisStep.LLM_ANALYSIS, "AI가 등본을 분석중이에요")
 
+        val sectionHash = sections.toSha256Hash()
+
         val analysisResult = try {
-            llmAnalysisPort.analyze(sections, leaseType)
+            val cached = llmCachePort.get(sectionHash)
+            if (cached != null) {
+                log.info("[LLM_ANALYSIS] 캐시 히트. jobId={}, hash={}", jobId, sectionHash)
+                cached
+            } else {
+                val result = llmAnalysisPort.analyze(sections, leaseType)
+                llmCachePort.put(sectionHash, result)
+                result
+            }
         } catch (e: Exception) {
             log.error("[LLM_ANALYSIS] 분석 실패. jobId={}", jobId, e)
             Sentry.withScope { scope ->
@@ -79,5 +93,14 @@ class AnalysisAsyncProcessor(
             }
             updateAndNotify(JobStatus.FAILED, AnalysisStep.POST_PROCESSING, "결과 저장 중 오류가 발생했습니다")
         }
+    }
+
+    private fun DeedSections.toSha256Hash(): String {
+        val content = sections.entries
+            .sortedBy { it.key }
+            .joinToString("|") { (k, v) -> "$k:${v.joinToString("\n")}" }
+        return MessageDigest.getInstance("SHA-256")
+            .digest(content.toByteArray(Charsets.UTF_8))
+            .joinToString("") { "%02x".format(it) }
     }
 }

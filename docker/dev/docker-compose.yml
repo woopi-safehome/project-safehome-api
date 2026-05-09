@@ -10,6 +10,7 @@ services:
       DB_PASSWORD: ${POSTGRES_PASSWORD}
       DB_WRITE_HOST: postgres-primary
       DB_READ_HOST: postgres-replica
+      REDIS_HOST: safehome-redis
       AI_API_URL: http://safehome-ai-api-dev:5000
     ports:
       - "8080:8080"
@@ -18,6 +19,8 @@ services:
       - safehome-net
     depends_on:
       postgres-primary:
+        condition: service_healthy
+      safehome-redis:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
@@ -79,9 +82,27 @@ services:
       timeout: 5s
       retries: 5
 
+  safehome-redis:
+    image: redis:7-alpine
+    container_name: safehome-dev-redis
+    command: redis-server --save 60 1 --loglevel warning --maxmemory 2gb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis-data:/data
+    ports:
+      - "127.0.0.1:6379:6379"
+    networks:
+      - safehome-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
 volumes:
   postgres-primary-data:
   postgres-replica-data:
+  redis-data:
 
 networks:
   postgres-net:
