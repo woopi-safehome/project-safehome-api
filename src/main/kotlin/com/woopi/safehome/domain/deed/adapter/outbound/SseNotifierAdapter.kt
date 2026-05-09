@@ -44,6 +44,7 @@ class SseNotifierAdapter : SseNotifierPort {
             } catch (ex: Exception) {
                 emitters.remove(jobId)
                 emitter.completeWithError(ex)
+                return
             }
 
             if (status == JobStatus.COMPLETED || status == JobStatus.FAILED) {
