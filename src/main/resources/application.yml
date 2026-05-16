@@ -10,6 +10,7 @@ spring:
       - classpath:application-logging.yml
       - classpath:application-ai.yml
       - classpath:application-sentry.yml
+      - classpath:application-auth.yml
 
 management:
   endpoints:

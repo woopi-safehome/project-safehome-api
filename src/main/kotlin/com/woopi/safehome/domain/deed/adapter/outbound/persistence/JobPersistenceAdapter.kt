@@ -6,8 +6,11 @@ import com.woopi.safehome.domain.deed.application.port.outbound.JobPersistencePo
 import com.woopi.safehome.domain.deed.domain.model.AnalysisJob
 import com.woopi.safehome.global.enums.AnalysisStep
 import com.woopi.safehome.global.enums.JobStatus
+import com.woopi.safehome.global.enums.SafetyLevel
 import com.woopi.safehome.global.exception.BusinessException
 import com.woopi.safehome.global.exception.ErrorCode
+import org.springframework.data.domain.Page
+import org.springframework.data.domain.Pageable
 import org.springframework.stereotype.Component
 
 @Component
@@ -24,6 +27,11 @@ class JobPersistenceAdapter(
     override fun findByJobId(jobId: String): AnalysisJob.Data? {
         return analysisJobRepository.findByJobId(jobId)
             ?.let { AnalysisJobEntityMapper.toModel(it) }
+    }
+
+    override fun findByUserId(userId: Long, pageable: Pageable): Page<AnalysisJob.Data> {
+        return analysisJobRepository.findByUserIdOrderByCreatedAtDesc(userId, pageable)
+            .map { AnalysisJobEntityMapper.toModel(it) }
     }
 
     override fun updateStatus(
@@ -43,13 +51,20 @@ class JobPersistenceAdapter(
             .let { AnalysisJobEntityMapper.toModel(it) }
     }
 
-    override fun complete(jobId: String, result: String): AnalysisJob.Data {
+    override fun complete(
+        jobId: String,
+        result: String,
+        safetyLevel: SafetyLevel?,
+        address: String?,
+    ): AnalysisJob.Data {
         val entity = analysisJobRepository.findByJobId(jobId)
             ?: throw BusinessException(ErrorCode.NOT_FOUND)
 
         entity.status = JobStatus.COMPLETED
         entity.step = AnalysisStep.POST_PROCESSING
         entity.result = result
+        entity.safetyLevel = safetyLevel
+        entity.address = address
 
         return analysisJobRepository.save(entity)
             .let { AnalysisJobEntityMapper.toModel(it) }

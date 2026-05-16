@@ -9,6 +9,8 @@ import com.woopi.safehome.domain.deed.domain.model.AnalysisJob
 import com.woopi.safehome.global.enums.JobStatus
 import com.woopi.safehome.global.exception.BusinessException
 import com.woopi.safehome.global.exception.ErrorCode
+import org.springframework.data.domain.Page
+import org.springframework.data.domain.Pageable
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.transaction.support.TransactionSynchronization
@@ -35,6 +37,7 @@ class DeedUseCaseImpl(
                 fileName = command.fileName,
                 fileSize = command.fileSize,
                 status = JobStatus.PENDING,
+                userId = command.userId,
             )
         )
 
@@ -51,8 +54,16 @@ class DeedUseCaseImpl(
         return emitter
     }
 
-    override fun getJob(jobId: String): AnalysisJob.Data {
-        return jobPersistencePort.findByJobId(jobId)
+    override fun getJob(jobId: String, userId: Long): AnalysisJob.Data {
+        val job = jobPersistencePort.findByJobId(jobId)
             ?: throw BusinessException(ErrorCode.NOT_FOUND)
+
+        if (job.userId != userId) throw BusinessException(ErrorCode.FORBIDDEN)
+
+        return job
+    }
+
+    override fun getMyJobs(userId: Long, pageable: Pageable): Page<AnalysisJob.Data> {
+        return jobPersistencePort.findByUserId(userId, pageable)
     }
 }

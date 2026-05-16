@@ -57,3 +57,21 @@ CREATE TABLE IF NOT EXISTS analysis_jobs (
 
 CREATE INDEX IF NOT EXISTS idx_analysis_jobs_status ON analysis_jobs(status);
 CREATE INDEX IF NOT EXISTS idx_analysis_jobs_step ON analysis_jobs(step);
+
+-- 사용자 테이블
+CREATE TABLE IF NOT EXISTS users (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT 'ID',
+    kakao_id BIGINT NOT NULL COMMENT '카카오 사용자 ID',
+    nickname VARCHAR(100) NOT NULL COMMENT '닉네임',
+    profile_image_url VARCHAR(500) NULL COMMENT '프로필 이미지 URL',
+    is_deleted BOOLEAN NOT NULL DEFAULT FALSE COMMENT '삭제 여부',
+    created_id BIGINT NOT NULL COMMENT '생성자 ID',
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '생성 시간',
+    updated_id BIGINT NULL COMMENT '수정자 ID',
+    updated_at TIMESTAMP NULL DEFAULT NULL COMMENT '수정 시간',
+
+    UNIQUE KEY uk_users_kakao_id (kakao_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_users_kakao_id ON users(kakao_id);
+CREATE INDEX IF NOT EXISTS idx_users_deleted ON users(is_deleted);

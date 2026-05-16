@@ -35,6 +35,8 @@ val pdfBoxVersion = "3.0.3"
 
 val sentryVersion = "7.14.0"
 
+val jjwtVersion = "0.12.6"
+
 dependencies {
 	implementation("org.springframework.boot:spring-boot-starter-data-jpa")
 	implementation("org.springframework.boot:spring-boot-starter-web")
@@ -70,6 +72,11 @@ dependencies {
 
 	// PDFBox
 	implementation("org.apache.pdfbox:pdfbox:$pdfBoxVersion")
+
+	// JWT
+	implementation("io.jsonwebtoken:jjwt-api:$jjwtVersion")
+	runtimeOnly("io.jsonwebtoken:jjwt-impl:$jjwtVersion")
+	runtimeOnly("io.jsonwebtoken:jjwt-jackson:$jjwtVersion")
 
 	// Sentry
 	implementation("io.sentry:sentry-spring-boot-starter-jakarta:$sentryVersion")

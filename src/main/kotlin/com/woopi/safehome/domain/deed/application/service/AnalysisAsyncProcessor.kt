@@ -1,5 +1,6 @@
 package com.woopi.safehome.domain.deed.application.service
 
+import com.fasterxml.jackson.databind.ObjectMapper
 import com.woopi.safehome.domain.deed.application.port.inbound.AnalysisExecutorPort
 import com.woopi.safehome.domain.deed.application.port.outbound.JobPersistencePort
 import com.woopi.safehome.domain.deed.application.port.outbound.LlmAnalysisPort
@@ -11,6 +12,7 @@ import com.woopi.safehome.domain.deed.domain.exception.InvalidPdfException
 import com.woopi.safehome.domain.deed.domain.model.DeedSections
 import com.woopi.safehome.global.enums.AnalysisStep
 import com.woopi.safehome.global.enums.JobStatus
+import com.woopi.safehome.global.enums.SafetyLevel
 import io.sentry.Sentry
 import org.slf4j.LoggerFactory
 import org.springframework.scheduling.annotation.Async
@@ -26,6 +28,7 @@ class AnalysisAsyncProcessor(
     private val pdfParserPort: PdfParserPort,
     private val llmAnalysisPort: LlmAnalysisPort,
     private val llmCachePort: LlmCachePort,
+    private val objectMapper: ObjectMapper,
 ) : AnalysisExecutorPort {
 
     private val log = LoggerFactory.getLogger(AnalysisAsyncProcessor::class.java)
@@ -82,7 +85,8 @@ class AnalysisAsyncProcessor(
         updateAndNotify(JobStatus.IN_PROGRESS, AnalysisStep.POST_PROCESSING, "분석한 내용을 정리중이에요")
 
         try {
-            jobPersistencePort.complete(jobId, analysisResult)
+            val (safetyLevel, address) = extractSummaryFields(analysisResult)
+            jobPersistencePort.complete(jobId, analysisResult, safetyLevel, address)
             sseNotifierPort.notifyStep(jobId, JobStatus.COMPLETED, AnalysisStep.POST_PROCESSING, "완료 됐습니다!")
         } catch (e: Exception) {
             log.error("[POST_PROCESSING] 완료 처리 실패. jobId={}", jobId, e)
@@ -92,6 +96,20 @@ class AnalysisAsyncProcessor(
                 Sentry.captureException(e)
             }
             updateAndNotify(JobStatus.FAILED, AnalysisStep.POST_PROCESSING, "결과 저장 중 오류가 발생했습니다")
+        }
+    }
+
+    private fun extractSummaryFields(resultJson: String): Pair<SafetyLevel?, String?> {
+        return try {
+            val node = objectMapper.readTree(resultJson)
+            val safetyLevel = node.get("safetyLevel")?.asText()
+                ?.let { runCatching { SafetyLevel.valueOf(it) }.getOrNull() }
+            val address = node.get("propertyInfo")?.get("address")?.asText()
+                ?.takeIf { it.isNotBlank() }
+            safetyLevel to address
+        } catch (e: Exception) {
+            log.warn("[POST_PROCESSING] 요약 필드 추출 실패. 무시하고 계속합니다.", e)
+            null to null
         }
     }
 

@@ -8,6 +8,7 @@ object DeedCommand {
         val file: MultipartFile,
         val fileName: String,
         val fileSize: Long,
+        val userId: Long,
         val leaseType: String? = null,
     )
 }

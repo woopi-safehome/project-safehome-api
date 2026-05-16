@@ -55,3 +55,21 @@ CREATE TABLE IF NOT EXISTS analysis_jobs (
 
 CREATE INDEX IF NOT EXISTS idx_analysis_jobs_status  ON analysis_jobs(status);
 CREATE INDEX IF NOT EXISTS idx_analysis_jobs_step    ON analysis_jobs(step);
+
+-- 사용자 테이블
+CREATE TABLE IF NOT EXISTS users (
+    id               BIGSERIAL PRIMARY KEY,
+    kakao_id         BIGINT        NOT NULL,
+    nickname         VARCHAR(100)  NOT NULL,
+    profile_image_url VARCHAR(500) NULL,
+    is_deleted       BOOLEAN       NOT NULL DEFAULT FALSE,
+    created_id       BIGINT        NOT NULL,
+    created_at       TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_id       BIGINT        NULL,
+    updated_at       TIMESTAMP     NULL,
+
+    CONSTRAINT uk_users_kakao_id UNIQUE (kakao_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_users_kakao_id ON users(kakao_id);
+CREATE INDEX IF NOT EXISTS idx_users_deleted  ON users(is_deleted);

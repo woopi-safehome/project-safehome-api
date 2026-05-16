@@ -4,7 +4,9 @@ import com.fasterxml.jackson.annotation.JsonRawValue
 import com.woopi.safehome.domain.deed.domain.model.AnalysisJob
 import com.woopi.safehome.global.enums.AnalysisStep
 import com.woopi.safehome.global.enums.JobStatus
+import com.woopi.safehome.global.enums.SafetyLevel
 import io.swagger.v3.oas.annotations.media.Schema
+import java.time.LocalDateTime
 
 object DeedResponse {
 
@@ -34,6 +36,35 @@ object DeedResponse {
                 step = job.step,
                 description = job.description,
                 result = job.result,
+            )
+        }
+    }
+
+    data class JobSummary(
+        @Schema(description = "Job ID")
+        val jobId: String,
+        @Schema(description = "파일명")
+        val fileName: String,
+        @Schema(description = "파일 크기 (bytes)")
+        val fileSize: Long,
+        @Schema(description = "분석 상태")
+        val status: JobStatus,
+        @Schema(description = "안전 등급")
+        val safetyLevel: SafetyLevel?,
+        @Schema(description = "부동산 주소")
+        val address: String?,
+        @Schema(description = "분석 시작 일시")
+        val createdAt: LocalDateTime?,
+    ) {
+        companion object {
+            fun from(job: AnalysisJob.Data) = JobSummary(
+                jobId = job.jobId,
+                fileName = job.fileName,
+                fileSize = job.fileSize,
+                status = job.status,
+                safetyLevel = job.safetyLevel,
+                address = job.address,
+                createdAt = job.createdAt,
             )
         }
     }
