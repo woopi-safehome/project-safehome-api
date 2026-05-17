@@ -14,7 +14,7 @@ class LlmCacheAdapter(
     private val log = LoggerFactory.getLogger(LlmCacheAdapter::class.java)
 
     companion object {
-        private const val KEY_PREFIX = "llm:deed:"
+        private const val KEY_PREFIX = "llm:deed:v2:"
         private val TTL = Duration.ofDays(7)
     }
 

@@ -58,7 +58,7 @@ class AnalysisAsyncProcessor(
         // 2. LLM 분석 (캐시 우선)
         updateAndNotify(JobStatus.IN_PROGRESS, AnalysisStep.LLM_ANALYSIS, "AI가 등본을 분석중이에요")
 
-        val sectionHash = sections.toSha256Hash()
+        val sectionHash = "${sections.toSha256Hash()}:${leaseType ?: "미지정"}"
 
         val analysisResult = try {
             val cached = llmCachePort.get(sectionHash)

@@ -36,19 +36,22 @@ CREATE INDEX IF NOT EXISTS idx_sample_details_deleted     ON sample_details(is_d
 
 -- 분석 job 테이블
 CREATE TABLE IF NOT EXISTS analysis_jobs (
-    id          BIGSERIAL PRIMARY KEY,
-    job_id      VARCHAR(255) NOT NULL,
-    file_name   VARCHAR(255) NOT NULL,
-    file_size   BIGINT       NOT NULL,
-    status      VARCHAR(50)  NOT NULL,
-    step        VARCHAR(100) NULL,
-    result      TEXT         NULL,
-    description TEXT         NULL,
-    is_deleted  BOOLEAN      NOT NULL DEFAULT FALSE,
-    created_id  BIGINT       NOT NULL,
-    created_at  TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_id  BIGINT       NULL,
-    updated_at  TIMESTAMP    NULL,
+    id           BIGSERIAL PRIMARY KEY,
+    job_id       VARCHAR(255) NOT NULL,
+    file_name    VARCHAR(255) NOT NULL,
+    file_size    BIGINT       NOT NULL,
+    status       VARCHAR(50)  NOT NULL,
+    step         VARCHAR(100) NULL,
+    result       TEXT         NULL,
+    description  TEXT         NULL,
+    safety_level VARCHAR(50)  NULL,
+    address      VARCHAR(500) NULL,
+    user_id      BIGINT       NULL,
+    is_deleted   BOOLEAN      NOT NULL DEFAULT FALSE,
+    created_id   BIGINT       NOT NULL,
+    created_at   TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_id   BIGINT       NULL,
+    updated_at   TIMESTAMP    NULL,
 
     CONSTRAINT uk_analysis_jobs_job_id UNIQUE (job_id)
 );
