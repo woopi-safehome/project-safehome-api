@@ -55,6 +55,8 @@ object DeedResponse {
         val address: String?,
         @Schema(description = "분석 시작 일시")
         val createdAt: LocalDateTime?,
+        @Schema(description = "임대차 유형 (전세/월세)")
+        val leaseType: String?,
     ) {
         companion object {
             fun from(job: AnalysisJob.Data) = JobSummary(
@@ -65,6 +67,7 @@ object DeedResponse {
                 safetyLevel = job.safetyLevel,
                 address = job.address,
                 createdAt = job.createdAt,
+                leaseType = job.leaseType,
             )
         }
     }

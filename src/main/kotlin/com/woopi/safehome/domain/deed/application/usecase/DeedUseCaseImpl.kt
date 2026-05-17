@@ -38,6 +38,7 @@ class DeedUseCaseImpl(
                 fileSize = command.fileSize,
                 status = JobStatus.PENDING,
                 userId = command.userId,
+                leaseType = command.leaseType,
             )
         )
 

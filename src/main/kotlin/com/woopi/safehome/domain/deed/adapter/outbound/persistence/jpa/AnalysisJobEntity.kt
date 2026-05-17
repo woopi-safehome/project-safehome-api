@@ -43,4 +43,7 @@ class AnalysisJobEntity(
     @Column(name = "address")
     var address: String? = null,
 
+    @Column(name = "lease_type")
+    var leaseType: String? = null,
+
 ) : BaseEntity()

@@ -15,7 +15,8 @@ object AnalysisJob {
         val userId: Long? = null,
         val step: AnalysisStep? = null,
         val result: String? = null,
-        val description: String? = null
+        val description: String? = null,
+        val leaseType: String? = null,
     )
 
     data class Data(
@@ -31,5 +32,6 @@ object AnalysisJob {
         val safetyLevel: SafetyLevel? = null,
         val address: String? = null,
         val createdAt: LocalDateTime? = null,
+        val leaseType: String? = null,
     )
 }

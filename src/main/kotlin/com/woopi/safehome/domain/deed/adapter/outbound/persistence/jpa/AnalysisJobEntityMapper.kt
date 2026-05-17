@@ -18,6 +18,7 @@ object AnalysisJobEntityMapper {
             safetyLevel = entity.safetyLevel,
             address = entity.address,
             createdAt = entity.createdAt,
+            leaseType = entity.leaseType,
         )
     }
 
@@ -31,6 +32,7 @@ object AnalysisJobEntityMapper {
             step = create.step,
             result = create.result,
             description = create.description,
+            leaseType = create.leaseType,
         )
     }
 }
