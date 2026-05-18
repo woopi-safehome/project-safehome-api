@@ -7,12 +7,12 @@ spring:
   datasource:
     write:
       driver-class-name: org.postgresql.Driver
-      url: jdbc:postgresql://${DB_WRITE_HOST:localhost}:5432/${DB_NAME:safehome}
+      url: jdbc:postgresql://${DB_WRITE_HOST:localhost}:${DB_WRITE_PORT:5432}/${DB_NAME:safehome}
       username: ${DB_USERNAME:safehome}
       password: ${DB_PASSWORD}
     read:
       driver-class-name: org.postgresql.Driver
-      url: jdbc:postgresql://${DB_READ_HOST:localhost}:5433/${DB_NAME:safehome}
+      url: jdbc:postgresql://${DB_READ_HOST:localhost}:${DB_READ_PORT:5433}/${DB_NAME:safehome}
       username: ${DB_USERNAME:safehome}
       password: ${DB_PASSWORD}
     hikari:
