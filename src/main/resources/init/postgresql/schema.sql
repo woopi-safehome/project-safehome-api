@@ -34,6 +34,9 @@ CREATE INDEX IF NOT EXISTS idx_sample_details_sample_id   ON sample_details(samp
 CREATE INDEX IF NOT EXISTS idx_sample_details_detail_value ON sample_details(detail_value);
 CREATE INDEX IF NOT EXISTS idx_sample_details_deleted     ON sample_details(is_deleted);
 
+-- 분석 job 테이블 (기존 테이블 컬럼 누락분 패치)
+ALTER TABLE IF EXISTS analysis_jobs ADD COLUMN IF NOT EXISTS lease_type VARCHAR(100) NULL;
+
 -- 분석 job 테이블
 CREATE TABLE IF NOT EXISTS analysis_jobs (
     id           BIGSERIAL PRIMARY KEY,
@@ -46,6 +49,7 @@ CREATE TABLE IF NOT EXISTS analysis_jobs (
     description  TEXT         NULL,
     safety_level VARCHAR(50)  NULL,
     address      VARCHAR(500) NULL,
+    lease_type   VARCHAR(100) NULL,
     user_id      BIGINT       NULL,
     is_deleted   BOOLEAN      NOT NULL DEFAULT FALSE,
     created_id   BIGINT       NOT NULL,
