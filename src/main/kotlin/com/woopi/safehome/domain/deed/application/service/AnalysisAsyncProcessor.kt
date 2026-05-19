@@ -116,9 +116,19 @@ class AnalysisAsyncProcessor(
     private fun DeedSections.toSha256Hash(): String {
         val content = sections.entries
             .sortedBy { it.key }
-            .joinToString("|") { (k, v) -> "$k:${v.joinToString("\n")}" }
+            .joinToString("|") { (k, v) ->
+                "$k:${v.joinToString("\n") { it.normalizeForHash() }}"
+            }
         return MessageDigest.getInstance("SHA-256")
             .digest(content.toByteArray(Charsets.UTF_8))
             .joinToString("") { "%02x".format(it) }
     }
+
+    private fun String.normalizeForHash(): String =
+        replace("\r\n", "\n")
+            .replace("\r", "\n")
+            .lines()
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .joinToString("\n")
 }
