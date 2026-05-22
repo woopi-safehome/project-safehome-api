@@ -17,7 +17,6 @@ import io.sentry.Sentry
 import org.slf4j.LoggerFactory
 import org.springframework.scheduling.annotation.Async
 import org.springframework.stereotype.Service
-import org.springframework.web.multipart.MultipartFile
 import java.security.MessageDigest
 
 @Service
@@ -33,8 +32,8 @@ class AnalysisAsyncProcessor(
 
     private val log = LoggerFactory.getLogger(AnalysisAsyncProcessor::class.java)
 
-    @Async
-    override fun execute(jobId: String, file: MultipartFile, leaseType: String?) {
+    @Async("analysisTaskExecutor")
+    override fun execute(jobId: String, fileBytes: ByteArray, contentType: String?, leaseType: String?) {
 
         fun updateAndNotify(status: JobStatus, step: AnalysisStep, message: String) {
             jobPersistencePort.updateStatus(jobId, status, step, message)
@@ -45,9 +44,8 @@ class AnalysisAsyncProcessor(
         updateAndNotify(JobStatus.IN_PROGRESS, AnalysisStep.PDF_PARSING, "첨부된 파일을 분석중이에요")
 
         val sections = try {
-            val content = file.bytes
-            pdfValidationPort.validate(content, file.contentType)
-            pdfParserPort.parse(content)
+            pdfValidationPort.validate(fileBytes, contentType)
+            pdfParserPort.parse(fileBytes)
         } catch (e: InvalidPdfException) {
             updateAndNotify(JobStatus.FAILED, AnalysisStep.PDF_PARSING, e.message ?: "PDF 검증 실패")
             return

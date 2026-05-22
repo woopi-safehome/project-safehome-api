@@ -41,9 +41,12 @@ class DeedUseCaseImpl(
             )
         )
 
+        val fileBytes = command.file.bytes
+        val contentType = command.file.contentType
+
         TransactionSynchronizationManager.registerSynchronization(object : TransactionSynchronization {
             override fun afterCommit() {
-                analysisExecutorPort.execute(jobId, command.file, command.leaseType)
+                analysisExecutorPort.execute(jobId, fileBytes, contentType, command.leaseType)
             }
         })
 

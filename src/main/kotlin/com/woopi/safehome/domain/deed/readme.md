@@ -138,7 +138,7 @@ DeedInboundWebAdapter (GET /api/deed/jobs)
 | 인터페이스 | 역할 |
 |-----------|------|
 | `DeedUseCase` | `uploadDeed(DeedCommand.Upload): String`, `streamJob(jobId, userId): SseEmitter`, `getJob(jobId, userId): AnalysisJob.Data`, `getMyJobs(userId, pageable): Page<AnalysisJob.Data>` |
-| `AnalysisExecutorPort` | `execute(jobId, file, leaseType)` — 비동기 분석 실행 진입점 |
+| `AnalysisExecutorPort` | `execute(jobId, fileBytes, contentType, leaseType)` — 비동기 분석 실행 진입점 |
 | `DeedCommand` | UseCase 입력 커맨드 객체. `Upload(file, fileName, fileSize, userId, leaseType?)` |
 
 ### application/port/outbound
