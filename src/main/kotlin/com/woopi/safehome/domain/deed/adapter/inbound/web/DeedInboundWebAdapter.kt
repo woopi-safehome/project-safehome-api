@@ -30,26 +30,35 @@ class DeedInboundWebAdapter(
 ) {
 
     @Operation(
-        summary = "등기부등본 분석",
-        description = "등기부등본 PDF파일 업로드 후, 분석 작업을 시작하고 진행상황을 SSE로 스트리밍합니다."
+        summary = "등기부등본 업로드",
+        description = "등기부등본 PDF 파일을 업로드하고 분석 Job을 생성합니다. 반환된 jobId로 /jobs/{jobId}/stream에서 진행상황을 구독하세요."
     )
-    @PostMapping(
-        "/analyze",
-        consumes = [MediaType.MULTIPART_FORM_DATA_VALUE],
-        produces = [MediaType.TEXT_EVENT_STREAM_VALUE]
-    )
-    fun analyzeDeed(
+    @PostMapping("/upload", consumes = [MediaType.MULTIPART_FORM_DATA_VALUE])
+    fun uploadDeed(
         @CurrentUser userId: Long,
-        @ModelAttribute request: DeedRequest.Analyze,
-    ): SseEmitter {
-        val command = DeedCommand.Analyze(
+        @ModelAttribute request: DeedRequest.Upload,
+    ): ApiResponse<DeedResponse.UploadResult> {
+        val command = DeedCommand.Upload(
             file = request.file,
             fileName = request.file.originalFilename ?: "unknown.pdf",
             fileSize = request.file.size,
             userId = userId,
             leaseType = request.leaseType,
         )
-        return deedUseCase.analyzeDeed(command)
+        val jobId = deedUseCase.uploadDeed(command)
+        return ApiResponse.success(DeedResponse.UploadResult(jobId))
+    }
+
+    @Operation(
+        summary = "분석 진행상황 SSE 구독",
+        description = "jobId에 해당하는 분석 진행상황을 SSE로 실시간 수신합니다. 이미 완료된 경우 최종 상태를 즉시 전송합니다."
+    )
+    @GetMapping("/jobs/{jobId}/stream", produces = [MediaType.TEXT_EVENT_STREAM_VALUE])
+    fun streamJob(
+        @CurrentUser userId: Long,
+        @PathVariable jobId: String,
+    ): SseEmitter {
+        return deedUseCase.streamJob(jobId, userId)
     }
 
     @Operation(

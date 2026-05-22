@@ -27,8 +27,7 @@ class DeedUseCaseImpl(
 ) : DeedUseCase {
 
     @Transactional
-    override fun analyzeDeed(command: DeedCommand.Analyze): SseEmitter {
-
+    override fun uploadDeed(command: DeedCommand.Upload): String {
         val jobId = UUID.randomUUID().toString()
 
         jobPersistencePort.create(
@@ -42,15 +41,32 @@ class DeedUseCaseImpl(
             )
         )
 
-        val emitter = sseNotifierPort.createEmitter(jobId)
-
-        sseNotifierPort.notifyStep(jobId, JobStatus.PENDING, null, "분석 작업이 시작되었습니다.")
-
         TransactionSynchronizationManager.registerSynchronization(object : TransactionSynchronization {
             override fun afterCommit() {
                 analysisExecutorPort.execute(jobId, command.file, command.leaseType)
             }
         })
+
+        return jobId
+    }
+
+    override fun streamJob(jobId: String, userId: Long): SseEmitter {
+        val job = jobPersistencePort.findByJobId(jobId)
+            ?: throw BusinessException(ErrorCode.NOT_FOUND)
+
+        if (job.userId != userId) throw BusinessException(ErrorCode.FORBIDDEN)
+
+        val emitter = sseNotifierPort.createEmitter(jobId)
+
+        // 이미 분석이 끝난 경우 — 즉시 최종 상태를 전송하고 emitter를 닫음
+        if (job.status == JobStatus.COMPLETED || job.status == JobStatus.FAILED) {
+            sseNotifierPort.notifyStep(
+                jobId = jobId,
+                status = job.status,
+                step = job.step,
+                message = job.description ?: "분석이 완료되었습니다.",
+            )
+        }
 
         return emitter
     }

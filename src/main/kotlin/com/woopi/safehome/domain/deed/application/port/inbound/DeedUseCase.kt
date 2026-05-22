@@ -8,7 +8,11 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter
 
 interface DeedUseCase {
 
-    fun analyzeDeed(command: DeedCommand.Analyze): SseEmitter
+    /** PDF 업로드 → Job 생성 → 비동기 분석 시작, jobId 반환 */
+    fun uploadDeed(command: DeedCommand.Upload): String
+
+    /** jobId에 해당하는 SSE 스트림 구독 (분석 진행상황 실시간 수신) */
+    fun streamJob(jobId: String, userId: Long): SseEmitter
 
     fun getJob(jobId: String, userId: Long): AnalysisJob.Data
 

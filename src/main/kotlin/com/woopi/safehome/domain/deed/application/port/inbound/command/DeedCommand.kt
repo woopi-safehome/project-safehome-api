@@ -4,7 +4,7 @@ import org.springframework.web.multipart.MultipartFile
 
 object DeedCommand {
 
-    data class Analyze(
+    data class Upload(
         val file: MultipartFile,
         val fileName: String,
         val fileSize: Long,

@@ -6,7 +6,7 @@ import org.springframework.web.multipart.MultipartFile
 
 object DeedRequest {
 
-    data class Analyze(
+    data class Upload(
         @Schema(description = "등기부등본 PDF 파일")
         @NotNull
         val file: MultipartFile,

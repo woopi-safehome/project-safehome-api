@@ -10,6 +10,11 @@ import java.time.LocalDateTime
 
 object DeedResponse {
 
+    data class UploadResult(
+        @Schema(description = "생성된 분석 Job ID")
+        val jobId: String,
+    )
+
     data class JobDetail(
         @Schema(description = "Job ID")
         val jobId: String,
