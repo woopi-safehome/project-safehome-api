@@ -185,7 +185,7 @@ AI API 없이 API 서버만 시작하면 LLM 분석 단계에서 `FAILED` 이벤
 **환경변수 파일 위치 (서버)**
 
 ```
-/home/woopi/project/safehome/env/.env_api
+/home/<username>/project/safehome/env/.env_api
 ```
 
 **Docker 구성 파일 위치:** `docker/dev/`
@@ -283,7 +283,7 @@ ghcr.io/<owner>/safehome-api:dev-previous  ← 직전 버전 (롤백용)
 문제 발생 시 서버에서:
 
 ```bash
-cd /home/woopi/project/safehome
+cd /home/<username>/project/safehome
 
 sed -i 's/:dev$/:dev-previous/' docker-compose.yml
 docker compose up -d --no-deps safehome-api
@@ -310,9 +310,9 @@ sed -i 's/:dev-previous$/:dev/' docker-compose.yml
 docker network create safehome-net
 
 # 2. 환경변수 파일 작성
-mkdir -p /home/woopi/project/safehome/env
-cp docker/dev/.env.template /home/woopi/project/safehome/env/.env_api
-nano /home/woopi/project/safehome/env/.env_api
+mkdir -p /home/<username>/project/safehome/env
+cp docker/dev/.env.template /home/<username>/project/safehome/env/.env_api
+nano /home/<username>/project/safehome/env/.env_api
 # GITHUB_OWNER, POSTGRES_PASSWORD 등 실제 값으로 수정
 
 # 3. GitHub Actions용 SSH 키 생성
@@ -321,7 +321,7 @@ cat ~/.ssh/github_actions.pub >> ~/.ssh/authorized_keys
 chmod 600 ~/.ssh/authorized_keys
 
 # 4. DB 컨테이너 최초 기동 (API 컨테이너는 워크플로우가 기동)
-cd /home/woopi/project/safehome
+cd /home/<username>/project/safehome
 docker compose -f docker/dev/docker-compose.yml up -d postgres-primary postgres-replica
 ```
 
