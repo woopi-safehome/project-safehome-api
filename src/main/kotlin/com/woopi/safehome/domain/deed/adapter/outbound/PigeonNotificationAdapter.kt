@@ -26,7 +26,7 @@ class PigeonNotificationAdapter(
                     .toBodilessEntity()
                 log.info("[Notification] FCM 발송 성공. jobId={}, token={}", jobId, token.take(20))
             } catch (e: Exception) {
-                log.warn("[Notification] pigeon 호출 실패 (무시). jobId={}, error={}", jobId, e.message)
+                log.error("[Notification] pigeon 호출 실패 (무시). jobId={}, error={}", jobId, e.message)
             }
         }
     }
