@@ -21,6 +21,8 @@ deed/
 │       ├── SseNotifierAdapter            # SseNotifierPort 구현체 (SSE Emitter 관리)
 │       ├── LlmAnalysisAdapter            # LlmAnalysisPort 구현체 (AI API HTTP 호출)
 │       ├── LlmCacheAdapter               # LlmCachePort 구현체 (Redis 캐시 조회/저장, TTL 30일)
+│       ├── PigeonNotificationAdapter     # NotificationPort 구현체 (pigeon 서비스 HTTP 호출)
+│       ├── UserDeviceQueryAdapter        # UserDeviceQueryPort 구현체 (auth 도메인 Repository 직접 사용)
 │       └── persistence/
 │           ├── JobPersistenceAdapter     # JobPersistencePort 구현체 (JPA 저장/조회)
 │           └── jpa/
@@ -41,7 +43,9 @@ deed/
 │   │       ├── PdfParserPort             # PDF 파싱 포트 (ByteArray → DeedSections)
 │   │       ├── PdfValidationPort         # PDF 유효성 검증 포트 (ByteArray, contentType)
 │   │       ├── LlmAnalysisPort           # LLM 분석 포트 (DeedSections → 분석 결과 JSON)
-│   │       └── LlmCachePort              # LLM 응답 캐시 포트 (섹션 해시 기반 Redis 캐시)
+│   │       ├── LlmCachePort              # LLM 응답 캐시 포트 (섹션 해시 기반 Redis 캐시)
+│   │       ├── NotificationPort          # FCM 푸시 발송 포트 (sendPush)
+│   │       └── UserDeviceQueryPort       # 사용자 FCM 토큰 조회 포트 (findTokensByUserId)
 │   ├── service/
 │   │   └── AnalysisAsyncProcessor        # AnalysisExecutorPort 구현체 (@Async 비동기 처리, 완료 시 safetyLevel/address 추출)
 │   └── usecase/
@@ -80,6 +84,9 @@ DeedInboundWebAdapter (POST /api/deed/upload)
         7. extractSummaryFields()            # result JSON에서 safetyLevel/address 추출
         8. JobPersistencePort.complete()     # 결과 저장 (COMPLETED, safetyLevel, address 포함)
         9. SseNotifierPort.notifyStep()      # COMPLETED 이벤트 전송
+       10. userId != null 이면 FCM 푸시 발송
+           ├─ UserDeviceQueryPort.findTokensByUserId(userId)  # 등록된 FCM 토큰 목록 조회
+           └─ NotificationPort.sendPush(tokens, jobId)        # pigeon 서비스로 발송 요청
 ```
 
 ### ② SSE 구독 (GET /api/deed/jobs/{jobId}/stream)
@@ -129,6 +136,8 @@ DeedInboundWebAdapter (GET /api/deed/jobs)
 | `LlmAnalysisAdapter` | `RestTemplate`으로 AI API(`POST /api/deed/analyze`) 호출. `DeedSections` → 분석 결과 JSON String 반환 |
 | `LlmCacheAdapter` | `StringRedisTemplate`으로 LLM 응답 캐싱. 키: `llm:deed:{sha256}`, TTL: 7일 |
 | `JobPersistenceAdapter` | `AnalysisJobRepository`를 통해 Job 생성/상태 갱신/완료 처리/유저별 목록 조회 |
+| `PigeonNotificationAdapter` | `RestClient`로 pigeon 서비스(`POST /api/messages/send`) 호출. 각 FCM 토큰별 "분석 완료" 푸시 발송. 실패 시 warn 로그만 기록하고 분석 흐름에 영향 없음 |
+| `UserDeviceQueryAdapter` | auth 도메인의 `UserDeviceRepository`를 직접 주입받아 userId로 등록된 FCM 토큰 목록 조회 |
 | `AnalysisJobEntity` | `BaseEntity` 상속 JPA 엔티티 (jobId, fileName, fileSize, status, step, result, description, userId, safetyLevel, address) |
 | `AnalysisJobEntityMapper` | `AnalysisJobEntity` ↔ `AnalysisJob.Data` 변환 |
 | `AnalysisJobRepository` | Spring Data JPA Repository (`findByJobId`, `findByUserIdOrderByCreatedAtDesc`) |

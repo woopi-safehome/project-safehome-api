@@ -12,26 +12,31 @@ auth/
 ├── adapter/
 │   ├── inbound/web/
 │   │   ├── AuthInboundWebAdapter         # POST /api/auth/kakao, POST /api/auth/refresh
-│   │   ├── UserInboundWebAdapter         # DELETE /api/users/me
+│   │   ├── UserInboundWebAdapter         # DELETE /api/users/me, POST /api/users/devices
 │   │   └── dto/
 │   │       ├── AuthRequest               # 요청 DTO (KakaoLogin, Refresh)
-│   │       └── AuthResponse              # 응답 DTO (Login, Token)
+│   │       ├── AuthResponse              # 응답 DTO (Login, Token)
+│   │       └── DeviceRequest             # FCM 디바이스 토큰 요청 DTO (Register)
 │   └── outbound/
 │       ├── KakaoApiAdapter               # KakaoApiPort 구현체 (Kakao REST API 호출)
 │       └── persistence/
 │           ├── UserEntityMapper          # UserEntity ↔ User.Data 변환
 │           ├── UserPersistenceAdapter    # UserPersistencePort 구현체 (JPA)
+│           ├── UserDevicePersistenceAdapter  # UserDevicePersistencePort 구현체 (JPA upsert)
 │           └── jpa/
 │               ├── UserEntity            # JPA 엔티티 (BaseEntity 상속)
-│               └── UserRepository        # Spring Data JPA Repository
+│               ├── UserRepository        # Spring Data JPA Repository
+│               ├── UserDeviceEntity      # FCM 디바이스 JPA 엔티티 (userId, fcmToken, unique)
+│               └── UserDeviceRepository  # Spring Data JPA Repository (findAllFcmTokenByUserId)
 │
 ├── application/
 │   ├── port/
 │   │   ├── inbound/
-│   │   │   └── AuthUseCase               # 카카오 로그인, 토큰 갱신, 회원 탈퇴 인터페이스
+│   │   │   └── AuthUseCase               # 카카오 로그인, 토큰 갱신, 회원 탈퇴, 디바이스 등록 인터페이스
 │   │   └── outbound/
 │   │       ├── UserPersistencePort       # 사용자 조회/저장/삭제 포트
-│   │       └── KakaoApiPort              # 카카오 사용자 정보 조회, 연결 해제 포트
+│   │       ├── KakaoApiPort              # 카카오 사용자 정보 조회, 연결 해제 포트
+│   │       └── UserDevicePersistencePort # FCM 토큰 upsert/삭제 포트
 │   └── usecase/
 │       └── AuthUseCaseImpl               # 비즈니스 흐름 구현
 │
@@ -68,6 +73,12 @@ DELETE /api/users/me   [Authorization: Bearer {accessToken}]
       → UserPersistencePort.findById()           # 사용자 조회 (kakaoId 확보)
       → KakaoApiPort.unlinkUser(kakaoId)         # 카카오 연결 해제
       → UserPersistencePort.deleteById()         # 소프트 딜리트
+
+POST /api/users/devices   [Authorization: Bearer {accessToken}]
+  UserInboundWebAdapter (@CurrentUser → userId 추출)
+    → AuthUseCase.registerDevice(userId, fcmToken)
+      → UserDevicePersistencePort.upsert(userId, fcmToken)
+          # fcmToken unique 제약: 동일 토큰 재등록 시 update, 신규 시 insert
 ```
 
 ---
@@ -79,9 +90,10 @@ DELETE /api/users/me   [Authorization: Bearer {accessToken}]
 | 클래스 | 역할 |
 |--------|------|
 | `AuthInboundWebAdapter` | `POST /api/auth/kakao` (카카오 로그인), `POST /api/auth/refresh` (토큰 갱신) |
-| `UserInboundWebAdapter` | `DELETE /api/users/me` (회원 탈퇴, `@CurrentUser` 인증 필요) |
+| `UserInboundWebAdapter` | `DELETE /api/users/me` (회원 탈퇴), `POST /api/users/devices` (FCM 토큰 등록). 모두 `@CurrentUser` 인증 필요 |
 | `AuthRequest` | 요청 DTO. `KakaoLogin(kakaoAccessToken)`, `Refresh(refreshToken)` |
 | `AuthResponse` | 응답 DTO. `Login(tokens + isNewUser)`, `Token(tokens)` |
+| `DeviceRequest` | FCM 디바이스 요청 DTO. `Register(fcmToken)` |
 
 ### adapter/outbound
 
@@ -89,15 +101,18 @@ DELETE /api/users/me   [Authorization: Bearer {accessToken}]
 |--------|------|
 | `KakaoApiAdapter` | `RestTemplate`으로 Kakao API 호출. `getUserInfo` (Bearer token), `unlinkUser` (KakaoAK admin key) |
 | `UserPersistenceAdapter` | `UserRepository`를 통해 사용자 조회/저장/소프트 딜리트 |
+| `UserDevicePersistenceAdapter` | `UserDeviceRepository`를 통해 FCM 토큰 upsert(저장 또는 갱신) / userId 기준 전체 삭제 |
 | `UserEntity` | `BaseEntity` 상속 JPA 엔티티 (kakaoId, nickname, profileImageUrl) |
 | `UserEntityMapper` | `UserEntity` ↔ `User.Data` 변환 |
 | `UserRepository` | Spring Data JPA Repository (`findByKakaoIdAndIsDeletedFalse`, `findByIdAndIsDeletedFalse`) |
+| `UserDeviceEntity` | `BaseEntity` 상속 JPA 엔티티 (userId, fcmToken unique). 테이블: `user_devices` |
+| `UserDeviceRepository` | Spring Data JPA Repository (`findAllFcmTokenByUserId`, `deleteByUserId`) |
 
 ### application/port/inbound
 
 | 인터페이스 | 역할 |
 |-----------|------|
-| `AuthUseCase` | `kakaoLogin(token): AuthResult`, `refresh(token): TokenPair`, `withdraw(userId)` |
+| `AuthUseCase` | `kakaoLogin(token): AuthResult`, `refresh(token): TokenPair`, `withdraw(userId)`, `registerDevice(userId, fcmToken)` |
 
 ### application/port/outbound
 
@@ -105,6 +120,7 @@ DELETE /api/users/me   [Authorization: Bearer {accessToken}]
 |-----------|------|
 | `UserPersistencePort` | `findByKakaoId`, `findById`, `save`, `deleteById` |
 | `KakaoApiPort` | `getUserInfo(accessToken): KakaoUserInfo`, `unlinkUser(kakaoId)` |
+| `UserDevicePersistencePort` | `upsert(userId, fcmToken)` (토큰 저장/갱신), `deleteByUserId(userId)` (회원 탈퇴 시 전체 삭제). deed 도메인의 `UserDeviceQueryAdapter`가 `UserDeviceRepository`를 직접 참조 |
 
 ### application/usecase
 

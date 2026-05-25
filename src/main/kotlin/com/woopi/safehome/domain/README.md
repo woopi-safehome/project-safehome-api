@@ -99,10 +99,14 @@ adapter/outbound/persistence/{Name}PersistenceAdapter
 
 ## 도메인 간 의존 규칙
 
-- 의존 방향은 단방향으로 고정한다: `deed → analysisjob`
-- 역방향(`analysisjob → deed`) 의존은 허용하지 않는다
+- 의존 방향은 단방향으로 고정한다
+- 역방향 의존은 허용하지 않는다
 - 역방향이 필요한 경우 의존하는 쪽에 포트를 정의하고 상대 도메인이 어댑터로 구현한다
 
 ```
 deed  ──→  analysisjob
+deed  ──→  auth          # UserDeviceQueryAdapter가 auth의 UserDeviceRepository를 직접 참조 (FCM 토큰 조회)
 ```
+
+> `deed → auth` 의존은 포트(`UserDeviceQueryPort`) + 어댑터(`UserDeviceQueryAdapter`) 패턴으로 격리되어 있다.
+> auth 도메인은 deed를 알지 못한다.

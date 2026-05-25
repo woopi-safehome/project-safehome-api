@@ -10,4 +10,6 @@ interface AuthUseCase {
     fun refresh(refreshToken: String): TokenPair
 
     fun withdraw(userId: Long)
+
+    fun registerDevice(userId: Long, fcmToken: String)
 }

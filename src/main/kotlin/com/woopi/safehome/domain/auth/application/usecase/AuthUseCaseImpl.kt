@@ -2,6 +2,7 @@ package com.woopi.safehome.domain.auth.application.usecase
 
 import com.woopi.safehome.domain.auth.application.port.inbound.AuthUseCase
 import com.woopi.safehome.domain.auth.application.port.outbound.KakaoApiPort
+import com.woopi.safehome.domain.auth.application.port.outbound.UserDevicePersistencePort
 import com.woopi.safehome.domain.auth.application.port.outbound.UserPersistencePort
 import com.woopi.safehome.domain.auth.domain.model.AuthResult
 import com.woopi.safehome.domain.auth.domain.model.TokenPair
@@ -16,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional
 @Service
 class AuthUseCaseImpl(
     private val userPersistencePort: UserPersistencePort,
+    private val userDevicePersistencePort: UserDevicePersistencePort,
     private val kakaoApiPort: KakaoApiPort,
     private val jwtProvider: JwtProvider,
 ) : AuthUseCase {
@@ -62,6 +64,12 @@ class AuthUseCaseImpl(
         val user = userPersistencePort.findById(userId)
             ?: throw BusinessException(ErrorCode.NOT_FOUND)
         kakaoApiPort.unlinkUser(user.kakaoId)
+        userDevicePersistencePort.deleteByUserId(userId)
         userPersistencePort.deleteById(userId)
+    }
+
+    @Transactional
+    override fun registerDevice(userId: Long, fcmToken: String) {
+        userDevicePersistencePort.upsert(userId, fcmToken)
     }
 }

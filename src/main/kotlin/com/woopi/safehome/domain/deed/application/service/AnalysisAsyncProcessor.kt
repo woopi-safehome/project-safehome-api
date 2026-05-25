@@ -5,9 +5,11 @@ import com.woopi.safehome.domain.deed.application.port.inbound.AnalysisExecutorP
 import com.woopi.safehome.domain.deed.application.port.outbound.JobPersistencePort
 import com.woopi.safehome.domain.deed.application.port.outbound.LlmAnalysisPort
 import com.woopi.safehome.domain.deed.application.port.outbound.LlmCachePort
+import com.woopi.safehome.domain.deed.application.port.outbound.NotificationPort
 import com.woopi.safehome.domain.deed.application.port.outbound.PdfParserPort
 import com.woopi.safehome.domain.deed.application.port.outbound.PdfValidationPort
 import com.woopi.safehome.domain.deed.application.port.outbound.SseNotifierPort
+import com.woopi.safehome.domain.deed.application.port.outbound.UserDeviceQueryPort
 import com.woopi.safehome.domain.deed.domain.exception.InvalidPdfException
 import com.woopi.safehome.domain.deed.domain.model.DeedSections
 import com.woopi.safehome.global.enums.AnalysisStep
@@ -27,13 +29,15 @@ class AnalysisAsyncProcessor(
     private val pdfParserPort: PdfParserPort,
     private val llmAnalysisPort: LlmAnalysisPort,
     private val llmCachePort: LlmCachePort,
+    private val userDeviceQueryPort: UserDeviceQueryPort,
+    private val notificationPort: NotificationPort,
     private val objectMapper: ObjectMapper,
 ) : AnalysisExecutorPort {
 
     private val log = LoggerFactory.getLogger(AnalysisAsyncProcessor::class.java)
 
     @Async("analysisTaskExecutor")
-    override fun execute(jobId: String, fileBytes: ByteArray, contentType: String?, leaseType: String?) {
+    override fun execute(jobId: String, fileBytes: ByteArray, contentType: String?, leaseType: String?, userId: Long?) {
 
         fun updateAndNotify(status: JobStatus, step: AnalysisStep, message: String) {
             jobPersistencePort.updateStatus(jobId, status, step, message)
@@ -86,6 +90,13 @@ class AnalysisAsyncProcessor(
             val (safetyLevel, address) = extractSummaryFields(analysisResult)
             jobPersistencePort.complete(jobId, analysisResult, safetyLevel, address)
             sseNotifierPort.notifyStep(jobId, JobStatus.COMPLETED, AnalysisStep.POST_PROCESSING, "완료 됐습니다!")
+
+            if (userId != null) {
+                val tokens = userDeviceQueryPort.findTokensByUserId(userId)
+                if (tokens.isNotEmpty()) {
+                    notificationPort.sendPush(tokens, jobId)
+                }
+            }
         } catch (e: Exception) {
             log.error("[POST_PROCESSING] 완료 처리 실패. jobId={}", jobId, e)
             Sentry.withScope { scope ->

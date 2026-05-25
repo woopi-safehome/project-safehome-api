@@ -83,3 +83,19 @@ CREATE TABLE IF NOT EXISTS users (
 
 CREATE INDEX IF NOT EXISTS idx_users_kakao_id ON users(kakao_id);
 CREATE INDEX IF NOT EXISTS idx_users_deleted ON users(is_deleted);
+
+-- 사용자 디바이스 테이블 (FCM 토큰 관리)
+CREATE TABLE IF NOT EXISTS user_devices (
+    id          BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_id     BIGINT        NOT NULL,
+    fcm_token   VARCHAR(512)  NOT NULL,
+    is_deleted  BOOLEAN       NOT NULL DEFAULT FALSE,
+    created_id  BIGINT        NOT NULL,
+    created_at  TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_id  BIGINT        NULL,
+    updated_at  TIMESTAMP     NULL DEFAULT NULL,
+
+    UNIQUE KEY uk_user_devices_fcm_token (fcm_token)
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_devices_user_id ON user_devices(user_id);

@@ -1,0 +1,3 @@
+safehome:
+  notification:
+    pigeon-url: ${PIGEON_URL:http://localhost:8081}
