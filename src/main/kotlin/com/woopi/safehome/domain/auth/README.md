@@ -106,7 +106,7 @@ POST /api/users/devices   [Authorization: Bearer {accessToken}]
 | `UserEntityMapper` | `UserEntity` ↔ `User.Data` 변환 |
 | `UserRepository` | Spring Data JPA Repository (`findByKakaoIdAndIsDeletedFalse`, `findByIdAndIsDeletedFalse`) |
 | `UserDeviceEntity` | `BaseEntity` 상속 JPA 엔티티 (userId, fcmToken unique). 테이블: `user_devices` |
-| `UserDeviceRepository` | Spring Data JPA Repository (`findAllFcmTokenByUserId`, `deleteByUserId`) |
+| `UserDeviceRepository` | Spring Data JPA Repository (`findByFcmToken`, `findAllByUserId`, `deleteAllByUserId`, `deleteByFcmToken`) |
 
 ### application/port/inbound
 

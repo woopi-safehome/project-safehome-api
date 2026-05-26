@@ -136,8 +136,8 @@ DeedInboundWebAdapter (GET /api/deed/jobs)
 | `LlmAnalysisAdapter` | `RestTemplate`으로 AI API(`POST /api/deed/analyze`) 호출. `DeedSections` → 분석 결과 JSON String 반환 |
 | `LlmCacheAdapter` | `StringRedisTemplate`으로 LLM 응답 캐싱. 키: `llm:deed:{sha256}`, TTL: 7일 |
 | `JobPersistenceAdapter` | `AnalysisJobRepository`를 통해 Job 생성/상태 갱신/완료 처리/유저별 목록 조회 |
-| `PigeonNotificationAdapter` | `RestClient`로 pigeon 서비스(`POST /api/messages/send`) 호출. 각 FCM 토큰별 "분석 완료" 푸시 발송. 실패 시 warn 로그만 기록하고 분석 흐름에 영향 없음 |
-| `UserDeviceQueryAdapter` | auth 도메인의 `UserDeviceRepository`를 직접 주입받아 userId로 등록된 FCM 토큰 목록 조회 |
+| `PigeonNotificationAdapter` | `RestClient`로 pigeon 서비스(`POST /api/messages/send`) 호출. 각 FCM 토큰별 "분석 완료" 푸시 발송. 실패 시 error 로그 기록 후 무시. pigeon이 `TOKEN_UNREGISTERED(400)` 반환 시 해당 토큰을 `user_devices`에서 삭제 |
+| `UserDeviceQueryAdapter` | auth 도메인의 `UserDeviceRepository`를 직접 주입받아 userId로 등록된 FCM 토큰 목록 조회(`findTokensByUserId`) 및 만료 토큰 삭제(`deleteByFcmToken`) |
 | `AnalysisJobEntity` | `BaseEntity` 상속 JPA 엔티티 (jobId, fileName, fileSize, status, step, result, description, userId, safetyLevel, address) |
 | `AnalysisJobEntityMapper` | `AnalysisJobEntity` ↔ `AnalysisJob.Data` 변환 |
 | `AnalysisJobRepository` | Spring Data JPA Repository (`findByJobId`, `findByUserIdOrderByCreatedAtDesc`) |
@@ -160,6 +160,8 @@ DeedInboundWebAdapter (GET /api/deed/jobs)
 | `PdfValidationPort` | `validate(ByteArray, contentType?)` — 실패 시 `InvalidPdfException` |
 | `LlmAnalysisPort` | `analyze(DeedSections): String` — AI API 호출로 분석 결과 JSON 반환 |
 | `LlmCachePort` | `get(sectionHash): String?`, `put(sectionHash, result)` — LLM 응답 캐시 인터페이스 |
+| `NotificationPort` | FCM 푸시 발송 포트 (`sendPush(fcmTokens, jobId)`) |
+| `UserDeviceQueryPort` | 사용자 FCM 토큰 조회(`findTokensByUserId`) 및 만료 토큰 삭제(`deleteByFcmToken`) 포트 |
 
 ### application/service & usecase
 
