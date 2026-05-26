@@ -11,4 +11,7 @@ class UserDeviceQueryAdapter(
 
     override fun findTokensByUserId(userId: Long): List<String> =
         userDeviceRepository.findAllByUserId(userId).map { it.fcmToken }
+
+    override fun deleteByFcmToken(fcmToken: String) =
+        userDeviceRepository.deleteByFcmToken(fcmToken)
 }
