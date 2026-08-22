@@ -2,6 +2,13 @@
 
 Spring Boot 설정 파일 모음. `application.yml`이 루트이며 나머지는 기능별로 분리된 프로파일 파일이다.
 
+> **범위**: `src/main/resources/**` (설정 파일 + DB 초기화 SQL)
+> **상위**: [API README](../../../README.md)
+> **검증**: 환경변수 목록은 각 `application-*.yml`의 `${VAR:기본값}` 표기와 대조
+
+> ⚠️ **알려진 불일치**: `application-swagger.yml`의 운영 블록만 `on-profile: prod`이고
+> 나머지 파일은 모두 `prd`를 쓴다. 현재 `prd`로 기동하면 Swagger 비활성 설정이 적용되지 않는다.
+
 ## 파일 목록
 
 | 파일 | 역할 |
@@ -14,7 +21,7 @@ Spring Boot 설정 파일 모음. `application.yml`이 루트이며 나머지는
 | `application-sentry.yml` | Sentry DSN, traces-sample-rate, 환경 태그 |
 | `application-swagger.yml` | Swagger UI 경로, local/dev 활성, prd 비활성 |
 | `application-logging.yml` | 로그 레벨 (local/dev: DEBUG, prd: ERROR) |
-| `application-websocket.yml` | SSE/WebSocket CORS 허용 오리진 |
+| `application-websocket.yml` | ⚠ **읽는 코드 없음** — `WebSocketConfig.kt`가 전체 주석 처리되어 사용되지 않는다. 실제 CORS는 `global/config/AsyncConfig.addCorsMappings()` |
 
 ## 프로파일 구분
 

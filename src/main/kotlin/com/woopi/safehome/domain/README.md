@@ -3,16 +3,22 @@
 헥사고날 아키텍처(Ports & Adapters) + DDD 기반으로 설계된 도메인 패키지.
 각 도메인은 독립된 헥사곤으로, `adapter / application / domain` 3개 레이어로 구성된다.
 
+> **범위**: `src/main/kotlin/com/woopi/safehome/domain/**` — 레이어 책임, 보일러플레이트, 도메인 간 의존 규칙
+> **상위**: [API README](../../../../../../../README.md) · **하위**: 각 도메인 `README.md`
+> **검증**: 도메인 목록은 이 디렉토리의 하위 폴더와 1:1
+
 ---
 
 ## 도메인 목록
 
 | 도메인 | 설명 |
 |--------|------|
-| `auth` | 카카오 소셜 로그인, JWT 토큰 발급/갱신, 회원 탈퇴 |
-| `deed` | 등기부등본 PDF 분석 요청 처리 (핵심 도메인) |
-| `analysisjob` | 비동기 분석 Job 실행 및 SSE 실시간 알림 |
+| `auth` | 카카오 소셜 로그인, JWT 발급/갱신, 회원 탈퇴, FCM 디바이스 등록 |
+| `deed` | 등기부등본 PDF 분석 (핵심 도메인) — Job 관리, 비동기 실행, SSE 알림 포함 |
 | `_sample` | CRUD 참조 구현체 (새 도메인 작성 시 템플릿) |
+
+> 비동기 분석 실행과 SSE 알림은 별도 도메인이 아니라 `deed` 안의
+> `application/service/AnalysisAsyncProcessor` + `adapter/outbound/SseNotifierAdapter`가 담당한다.
 
 ---
 
@@ -104,7 +110,6 @@ adapter/outbound/persistence/{Name}PersistenceAdapter
 - 역방향이 필요한 경우 의존하는 쪽에 포트를 정의하고 상대 도메인이 어댑터로 구현한다
 
 ```
-deed  ──→  analysisjob
 deed  ──→  auth          # UserDeviceQueryAdapter가 auth의 UserDeviceRepository를 직접 참조 (FCM 토큰 조회)
 ```
 

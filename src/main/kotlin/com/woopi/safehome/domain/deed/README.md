@@ -3,6 +3,11 @@
 등기부등본(PDF) 분석 요청을 받아 비동기로 처리하는 핵심 도메인.
 Job 생성, PDF 검증/파싱, 비동기 실행, SSE 알림, 결과 저장, 분석 이력 조회를 모두 담당한다.
 
+> **범위**: `domain/deed/**`
+> **상위**: [`domain/README.md`](../README.md) (레이어 규칙) · [API README](../../../../../../../../README.md)
+> **연관**: 캐시 정책 → `docs/llm-cache-strategy.md` · 엔드포인트 스펙 → 루트 README의 모듈 간 계약
+> **검증**: 클래스 목록은 이 디렉토리 트리와 1:1, 시그니처는 각 포트 인터페이스와 대조
+
 ---
 
 ## 패키지 구조
@@ -20,7 +25,7 @@ deed/
 │       ├── PdfValidationAdapter          # PdfValidationPort 구현체 (PDF 유효성 검증)
 │       ├── SseNotifierAdapter            # SseNotifierPort 구현체 (SSE Emitter 관리)
 │       ├── LlmAnalysisAdapter            # LlmAnalysisPort 구현체 (AI API HTTP 호출)
-│       ├── LlmCacheAdapter               # LlmCachePort 구현체 (Redis 캐시 조회/저장, TTL 30일)
+│       ├── LlmCacheAdapter               # LlmCachePort 구현체 (Redis 캐시 조회/저장, TTL 7일)
 │       ├── PigeonNotificationAdapter     # NotificationPort 구현체 (pigeon 서비스 HTTP 호출)
 │       ├── UserDeviceQueryAdapter        # UserDeviceQueryPort 구현체 (auth 도메인 Repository 직접 사용)
 │       └── persistence/
@@ -124,7 +129,7 @@ DeedInboundWebAdapter (GET /api/deed/jobs)
 |--------|------|
 | `DeedInboundWebAdapter` | `POST /api/deed/upload` (PDF 업로드 → jobId 반환), `GET /api/deed/jobs/{jobId}/stream` (SSE 구독), `GET /api/deed/jobs/{jobId}` (결과 조회), `GET /api/deed/jobs` (내 이력 목록) |
 | `DeedRequest` | 요청 DTO. `Upload`: `MultipartFile` + `leaseType` |
-| `DeedResponse` | 응답 DTO. `UploadResult`: jobId / `JobDetail`: 분석 결과 포함 / `JobSummary`: 목록용 요약 (safetyLevel, address, createdAt) |
+| `DeedResponse` | 응답 DTO. `UploadResult`: jobId / `JobDetail`: 분석 결과 포함(`result`는 `@JsonRawValue`) / `JobSummary`: 목록용 요약 (safetyLevel, address, createdAt, leaseType) |
 
 ### adapter/outbound
 
@@ -134,7 +139,7 @@ DeedInboundWebAdapter (GET /api/deed/jobs)
 | `PdfValidationAdapter` | 바이트 배열 비어 있음 여부 및 `contentType == application/pdf` 검증 |
 | `SseNotifierAdapter` | `ConcurrentHashMap<jobId, SseEmitter>` 관리. Emitter 생성 및 이벤트 전송 (타임아웃 5분). 클라이언트 연결 끊김(`AsyncRequestNotUsableException`) 시 에러 처리 없이 정리 |
 | `LlmAnalysisAdapter` | `RestTemplate`으로 AI API(`POST /api/deed/analyze`) 호출. `DeedSections` → 분석 결과 JSON String 반환 |
-| `LlmCacheAdapter` | `StringRedisTemplate`으로 LLM 응답 캐싱. 키: `llm:deed:{sha256}`, TTL: 7일 |
+| `LlmCacheAdapter` | `StringRedisTemplate`으로 LLM 응답 캐싱. 키: `llm:deed:v2:{sha256}:{leaseType}`, TTL: 7일. Redis 장애 시 예외를 삼키고 캐시 미스처럼 동작 |
 | `JobPersistenceAdapter` | `AnalysisJobRepository`를 통해 Job 생성/상태 갱신/완료 처리/유저별 목록 조회 |
 | `PigeonNotificationAdapter` | `RestClient`로 pigeon 서비스(`POST /api/messages/send`) 호출. 각 FCM 토큰별 "분석 완료" 푸시 발송. 실패 시 error 로그 기록 후 무시. pigeon이 `TOKEN_UNREGISTERED(400)` 반환 시 해당 토큰을 `user_devices`에서 삭제 |
 | `UserDeviceQueryAdapter` | auth 도메인의 `UserDeviceRepository`를 직접 주입받아 userId로 등록된 FCM 토큰 목록 조회(`findTokensByUserId`) 및 만료 토큰 삭제(`deleteByFcmToken`) |
@@ -147,7 +152,7 @@ DeedInboundWebAdapter (GET /api/deed/jobs)
 | 인터페이스 | 역할 |
 |-----------|------|
 | `DeedUseCase` | `uploadDeed(DeedCommand.Upload): String`, `streamJob(jobId, userId): SseEmitter`, `getJob(jobId, userId): AnalysisJob.Data`, `getMyJobs(userId, pageable): Page<AnalysisJob.Data>` |
-| `AnalysisExecutorPort` | `execute(jobId, fileBytes, contentType, leaseType)` — 비동기 분석 실행 진입점 |
+| `AnalysisExecutorPort` | `execute(jobId, fileBytes, contentType, leaseType, userId)` — 비동기 분석 실행 진입점 |
 | `DeedCommand` | UseCase 입력 커맨드 객체. `Upload(file, fileName, fileSize, userId, leaseType?)` |
 
 ### application/port/outbound
@@ -158,8 +163,8 @@ DeedInboundWebAdapter (GET /api/deed/jobs)
 | `SseNotifierPort` | Emitter 발급(`createEmitter`), 단계 이벤트 전송(`notifyStep`) |
 | `PdfParserPort` | `parse(ByteArray): DeedSections` |
 | `PdfValidationPort` | `validate(ByteArray, contentType?)` — 실패 시 `InvalidPdfException` |
-| `LlmAnalysisPort` | `analyze(DeedSections): String` — AI API 호출로 분석 결과 JSON 반환 |
-| `LlmCachePort` | `get(sectionHash): String?`, `put(sectionHash, result)` — LLM 응답 캐시 인터페이스 |
+| `LlmAnalysisPort` | `analyze(sections, leaseType): String` — AI API 호출로 분석 결과 JSON 반환 |
+| `LlmCachePort` | `get(sectionHash): String?`, `put(sectionHash, result)` — LLM 응답 캐시 인터페이스. `sectionHash`는 `{sha256}:{leaseType}` 형태 |
 | `NotificationPort` | FCM 푸시 발송 포트 (`sendPush(fcmTokens, jobId)`) |
 | `UserDeviceQueryPort` | 사용자 FCM 토큰 조회(`findTokensByUserId`) 및 만료 토큰 삭제(`deleteByFcmToken`) 포트 |
 

@@ -1,329 +1,184 @@
 # SafeHome API
 
-등기부등본 PDF 분석 서비스의 Spring Boot REST API 서버입니다.
+등기부등본 분석 서비스의 **메인 백엔드**. 인증(카카오+JWT), PDF 파싱, 분석 Job 관리, LLM 응답 캐싱, SSE 실시간 알림, 푸시 발송 트리거를 담당한다.
+AI 분석 자체는 하지 않는다 — AI API에 위임한다.
 
-## 기술 스택
+> **범위**: `project-safehome-api/**`
+> **연관**: [루트 README](../README.md) (모듈 간 계약·기동 순서) · [AI API README](../project-safehome-ai-api/README.md)
+> **검증**: 이 문서의 엔드포인트는 `*InboundWebAdapter`, 설정값은 `src/main/resources/application-*.yml`과 대조
 
-| 항목 | 버전 |
-|------|------|
-| Kotlin | 2.1.0 |
-| Spring Boot | 3.5.8 |
-| JDK | 21 |
-| Gradle | Kotlin DSL |
-| H2 Database | MySQL 호환 모드 (로컬) |
-| PostgreSQL | (개발/운영) |
-| Apache PDFBox | 3.0.3 |
-| SpringDoc OpenAPI | 2.8.9 |
-| Kotest | 5.9.1 |
+---
 
-## 아키텍처
+## TL;DR
 
-헥사고날 아키텍처 (Ports & Adapters) 기반의 DDD 구조
+| 항목 | 값 |
+|------|-----|
+| 스택 | Kotlin 2.1.0 / Spring Boot 3.5.8 / JDK 21 / Gradle Kotlin DSL |
+| 아키텍처 | 헥사고날 (Ports & Adapters) + DDD |
+| DB | `local`: H2 파일(MySQL 모드) · `dev`/`prd`: PostgreSQL Primary/Replica |
+| 캐시 | Redis (`local`은 임베디드) |
+| 진입점 | `SafehomeApplication.kt` → `domain/{auth,deed}/adapter/inbound/web/` |
+| 주요 라이브러리 | PDFBox 3.0.3, jjwt 0.12.6, SpringDoc 2.8.9, Sentry 7.14.0, Kotest 5.9.1 |
 
-```
-Client → Inbound Adapter (Controller)
-       → Inbound Port (UseCase interface)
-       → Application Service (UseCase impl)
-       → Domain Service / Model
-       → Outbound Port (interface)
-       → Outbound Adapter (Persistence / SSE / Async)
+```bash
+./gradlew bootRun                     # :8080 (local 프로파일)
+./gradlew build -x test               # 빌드
+./gradlew test                        # 전체 테스트
+./gradlew test --tests "*ClassName"   # 단일 클래스
 ```
 
-## 도메인
+Swagger: http://localhost:8080/swagger-ui.html · H2 Console: http://localhost:8080/h2-console
 
-| 도메인 | 설명 |
-|--------|------|
-| `deed` | 등기부등본 PDF 분석 (핵심 도메인) |
-| `analysisjob` | 비동기 분석 처리 + SSE 실시간 알림 |
-| `_sample` | CRUD 참조 구현 |
+---
 
-## 패키지 구조
+## 작업 레시피
+
+| 하려는 일 | 건드릴 파일 (순서대로) |
+|-----------|----------------------|
+| **새 엔드포인트 추가** | `application/port/inbound/{X}UseCase` → `application/usecase/{X}UseCaseImpl` → `adapter/inbound/web/{X}InboundWebAdapter` → `adapter/inbound/web/dto/` → 도메인 `README.md` |
+| **새 외부 시스템 연동** | `application/port/outbound/{X}Port` (인터페이스 먼저) → `adapter/outbound/{X}Adapter` → `application-*.yml`에 URL 추가 → `resources/README.md` |
+| **새 도메인 추가** | `domain/_sample/` 통째로 복사 → 이름 변경 → `domain/README.md` 도메인 목록에 추가 |
+| **분석 단계 추가/변경** | `global/enums/AnalysisStep` → `application/service/AnalysisAsyncProcessor` → 루트 README의 SSE 계약 → App의 `AnalysisStep` enum |
+| **DB 컬럼 추가** | `resources/init/postgresql/schema.sql` + `init/h2db/schema.sql` **양쪽** → `*Entity` → `*EntityMapper` → 도메인 모델 |
+| **에러 코드 추가** | `global/exception/ErrorCode` → 루트 README의 에러 코드 목록 |
+| **캐시 동작 변경** | `adapter/outbound/LlmCacheAdapter` → `docs/llm-cache-strategy.md` |
+
+---
+
+## 구조
 
 ```
 src/main/kotlin/com/woopi/safehome/
-├── domain/
-│   └── {domainName}/
-│       ├── adapter/
-│       │   ├── inbound/web/          # REST Controller
-│       │   └── outbound/
-│       │       ├── persistence/      # JPA Entity, Repository, Adapter
-│       │       └── sse/              # SSE Notifier
-│       ├── application/
-│       │   ├── port/
-│       │   │   ├── inbound/          # UseCase 인터페이스
-│       │   │   └── outbound/         # Persistence/Executor Port
-│       │   ├── usecase/              # UseCase 구현체
-│       │   └── service/              # Application Service
-│       ├── domain/service/           # Domain Service
-│       └── model/                    # Domain Model
-└── global/
-    ├── config/                       # Spring 설정 (CORS, Async, JPA 등)
-    ├── datasource/                   # Read/Write DataSource 라우팅
-    ├── enums/                        # JobStatus, AnalysisStep
-    ├── exception/                    # ErrorCode, BusinessException, GlobalExceptionHandler
-    ├── object/                       # BaseEntity (감사 필드)
-    └── response/                     # ApiResponse (sealed class)
+├── SafehomeApplication.kt
+├── domain/                  # 도메인별 헥사곤 → domain/README.md
+│   ├── auth/                # 카카오 로그인, JWT, 회원탈퇴, FCM 디바이스 등록
+│   ├── deed/                # 등기부등본 분석 (핵심 도메인)
+│   └── _sample/             # CRUD 참조 구현 — 새 도메인의 템플릿
+└── global/                  # 횡단 관심사 → global/README.md
+    ├── aop/ auth/ config/ datasource/
+    └── enums/ exception/ jwt/ object/ response/
 ```
 
-## API
+각 도메인은 `adapter`(기술) / `application`(유스케이스·포트) / `domain`(순수 로직) 3계층이다.
+레이어 책임·의존 규칙·보일러플레이트 → **[`domain/README.md`](src/main/kotlin/com/woopi/safehome/domain/README.md)**
 
-| Method | Path | 설명 |
+---
+
+## API 엔드포인트
+
+요청/응답 스펙과 SSE 이벤트 형식은 **[루트 README의 모듈 간 API 계약](../README.md#모듈-간-api-계약)** 이 원본이다. 여기는 구현 위치만 매핑한다.
+
+| 엔드포인트 | 구현 클래스 | 인증 |
+|-----------|------------|:---:|
+| `POST /api/auth/kakao` | `AuthInboundWebAdapter` | — |
+| `POST /api/auth/refresh` | `AuthInboundWebAdapter` | — |
+| `POST /api/users/devices` | `UserInboundWebAdapter` | 🔒 |
+| `DELETE /api/users/me` | `UserInboundWebAdapter` | 🔒 |
+| `POST /api/deed/upload` | `DeedInboundWebAdapter` | 🔒 |
+| `GET /api/deed/jobs/{jobId}/stream` | `DeedInboundWebAdapter` | 🔒 |
+| `GET /api/deed/jobs/{jobId}` | `DeedInboundWebAdapter` | 🔒 |
+| `GET /api/deed/jobs` | `DeedInboundWebAdapter` | 🔒 |
+
+🔒 = `@CurrentUser userId: Long` 파라미터로 인증. Spring Security를 쓰지 않고 `CurrentUserArgumentResolver`가 `Authorization: Bearer` 헤더를 직접 해석한다.
+
+---
+
+## 핵심 패턴
+
+### 응답 / 예외
+
+```kotlin
+ApiResponse.success(data)                    // { type: "success", data, message }
+throw BusinessException(ErrorCode.NOT_FOUND) // → GlobalExceptionHandler → { type: "error", code, message }
+```
+`ErrorCode` enum이 HTTP status·코드·기본 메시지를 한 곳에서 관리한다.
+
+### Read/Write DataSource 라우팅
+
+```
+@Transactional(readOnly = true) → DataSourceContextHolder(READ)  → Replica
+@Transactional                  → DataSourceContextHolder(WRITE) → Primary
+```
+`DataSourceTransactionInterceptor` → `RoutingDataSource`. 상세 → [`global/README.md`](src/main/kotlin/com/woopi/safehome/global/README.md)
+
+### 비동기 분석
+
+`DeedUseCaseImpl`이 Job을 저장하고 **트랜잭션 커밋 후**(`afterCommit`) `AnalysisAsyncProcessor.execute()`를 `@Async`로 띄운다.
+스레드풀은 `AsyncConfig`의 `analysisTaskExecutor` (core 4 / max 8 / queue 50).
+커밋 전에 띄우면 비동기 스레드가 아직 없는 Job을 조회하게 되므로 순서를 바꾸면 안 된다.
+
+---
+
+## 데이터베이스
+
+| 테이블 | 용도 | 비고 |
 |--------|------|------|
-| POST | `/api/deed/analyze` | 등기부등본 PDF 업로드 및 분석 시작 (SSE 스트리밍 응답) |
-| GET | `/api/deed/jobs/{jobId}` | 분석 Job 상태 및 결과 조회 |
+| `analysis_jobs` | 분석 Job | `job_id` UNIQUE, `result`는 AI 응답 JSON 문자열 |
+| `users` | 카카오 회원 | `kakao_id` UNIQUE, 탈퇴는 `is_deleted` 소프트 딜리트 |
+| `user_devices` | FCM 토큰 | `fcm_token` UNIQUE → 재등록 시 upsert |
+| `samples`, `sample_details` | `_sample` 도메인용 | 운영 기능 아님 |
 
-### POST /api/deed/analyze
-
-- Content-Type: `multipart/form-data`
-- 응답: `text/event-stream` (SSE)
-- 분석 진행 단계마다 SSE 이벤트 전송
-
-**SSE 이벤트 형식**
-
-```json
-{
-  "jobId": "uuid",
-  "status": "PENDING | IN_PROGRESS | COMPLETED | FAILED",
-  "step": "PDF_PARSING | LLM_ANALYSIS | POST_PROCESSING | null",
-  "message": "진행 상태 메시지",
-  "timestamp": "2026-04-15T10:00:00"
-}
-```
-
-**분석 단계 흐름**
-
-```
-PENDING         → 분석 작업이 시작되었습니다.
-IN_PROGRESS     → 첨부된 파일을 분석중이에요  (PDF_PARSING)
-IN_PROGRESS     → AI가 등본을 분석중이에요    (LLM_ANALYSIS)
-IN_PROGRESS     → 분석한 내용을 정리중이에요  (POST_PROCESSING)
-COMPLETED       → 완료 됐습니다!
-FAILED          → 오류 메시지                 (각 단계에서 발생 가능)
-```
-
-### GET /api/deed/jobs/{jobId}
-
-**응답 예시**
-
-```json
-{
-  "type": "success",
-  "data": {
-    "jobId": "uuid",
-    "fileName": "등기부등본.pdf",
-    "fileSize": 102400,
-    "status": "COMPLETED",
-    "step": "POST_PROCESSING",
-    "description": null,
-    "result": "{\"isValidDeed\":true,\"safetyLevel\":\"SAFE\",...}"
-  }
-}
-```
-
-> `result`는 분석 결과 JSON을 문자열로 직렬화한 값입니다. 클라이언트에서 `JSON.parse()`하여 사용합니다.
-
-## 설정 파일
-
-| 파일 | 설명 |
-|------|------|
-| `application.yml` | 기본 설정 |
-| `application-db.yml` | DB 설정 (H2, Read/Write 분리, HikariCP) |
-| `application-swagger.yml` | OpenAPI 설정 |
-| `application-ai.yml` | AI API URL 설정 (`safehome.ai-api.url`) |
-
-## 환경별 실행 가이드
-
-### 로컬 (Local)
-
-개발자 개인 PC 환경입니다. H2 인메모리 DB를 사용하여 별도 설치 없이 바로 실행 가능합니다.
-
-**사전 조건**
-
-- JDK 21
-- AI API 서버(`project-safehome-ai-api`)가 `http://localhost:5000`에서 실행 중이어야 합니다.
-
-**실행 순서**
-
-```bash
-# 1. AI API 먼저 시작 (필수)
-cd project-safehome-ai-api && python app.py
-
-# 2. API 서버 시작
-cd project-safehome-api && ./gradlew bootRun
-```
-
-AI API 없이 API 서버만 시작하면 LLM 분석 단계에서 `FAILED` 이벤트가 발생합니다.
-
-- Swagger UI: http://localhost:8080/swagger-ui.html
-- H2 Console: http://localhost:8080/h2-console
-
-**CORS**
-
-웹 브라우저 클라이언트(`localhost:8081`)에서 호출 가능하도록 CORS가 설정되어 있습니다 (`global/config/AsyncConfig.kt`).
+- 스키마는 **Flyway가 아니라** `spring.sql.init`으로 적용된다. `ddl-auto: none` 고정.
+- 스키마 파일이 **H2용·PostgreSQL용 2벌**(`resources/init/h2db/`, `resources/init/postgresql/`)이다. 컬럼 추가 시 양쪽 모두 수정해야 한다.
+- 모든 테이블은 `BaseEntity`의 감사 컬럼(`created_id/at`, `updated_id/at`)을 가진다.
 
 ---
 
-### 개발 서버 (Dev)
+## 설정
 
-홈 서버(Ubuntu, 미니 PC)에서 운영하는 개발/테스트 환경입니다. API 서버는 Docker 컨테이너로 배포되며 CI/CD는 GitHub Actions가 담당합니다.
+프로파일별 설정값·환경변수 전체 목록 → **[`resources/README.md`](src/main/resources/README.md)**
 
-**구성 요소**
+| 프로파일 | DB | Redis | Swagger | 로그 |
+|---------|-----|-------|---------|------|
+| `local` | H2 파일 | 임베디드 | `/swagger-ui.html` | DEBUG |
+| `dev` | PostgreSQL P/R | 외부 | `/api/swagger-ui.html` | DEBUG |
+| `prd` | PostgreSQL P/R | 외부 | 비활성 *(아래 함정 참고)* | ERROR |
 
-| 컨테이너 | 역할 | 포트 |
-|----------|------|------|
-| `safehome-api-dev` | Spring Boot API | `127.0.0.1:8080` |
-| `safehome-dev-primary` | PostgreSQL Primary (쓰기) | `127.0.0.1:5432` |
-| `safehome-dev-replica` | PostgreSQL Replica (읽기) | `127.0.0.1:5433` |
-
-> **PostgreSQL을 선택한 이유**
->
-> - AI 분석 결과를 JSON으로 저장하는 구조에서 `jsonb` 타입의 인덱싱·쿼리 지원이 강력함
-> - H2와 SQL 문법 차이가 적어 마이그레이션 부담이 낮음
-> - 완전 오픈소스(BSD 라이선스)로 Oracle 의존성 없음
-> - Spring Boot + JPA 환경에서 dialect 설정만으로 전환 가능
-
-**환경변수 파일 위치 (서버)**
-
-```
-/home/<username>/project/safehome/env/.env_api
-```
-
-**Docker 구성 파일 위치:** `docker/dev/`
+`local`은 환경변수 없이 그대로 실행된다. 카카오 로그인을 쓰려면 `KAKAO_ADMIN_KEY`가 필요하다.
 
 ---
 
-### 운영 (Production)
+## 배포
 
-**DB 구성: PostgreSQL Primary + Replica + 백업 (Docker)**
-
-| 역할 | 컨테이너 | 포트 |
-|------|----------|------|
-| Primary (쓰기) | `safehome-prod-primary` | `127.0.0.1:5432` |
-| Replica (읽기) | `safehome-prod-replica` | `127.0.0.1:5433` |
-
-**DB 실행**
-
-```bash
-cd docker/prod
-cp .env.template .env
-docker compose up -d
-```
-
-**백업**
-
-```bash
-# 수동 실행 또는 crontab 등록
-bash docker/prod/backup/backup.sh
-
-# crontab 예시 (매일 새벽 2시)
-0 2 * * * /path/to/docker/prod/backup/backup.sh
-```
-
-기본 보관 기간: 7일 (`.env`의 `BACKUP_RETENTION_DAYS`로 조정)
-
-**Docker 구성 파일 위치:** `docker/prod/`
-
-## CI/CD
-
-### 개요
-
-`develop` 브랜치에 push하면 GitHub Actions가 자동으로 빌드 → 이미지 배포를 수행합니다.
+`develop` push → GitHub Actions(`.github/workflows/deploy-api-dev.yml`) → `ghcr.io` → SSH → 컨테이너 교체.
 
 ```
-로컬 push
-  → GitHub Actions (빌드 + 이미지 생성)
-    → ghcr.io (이미지 저장)
-      → 개발 서버 (이미지 pull + 컨테이너 교체)
+빌드(JDK21) → 이미지 push(ghcr.io/<owner>/safehome-api:dev)
+  → SSH(appleboy/ssh-action) → docker compose pull → up -d --no-deps
+  → /actuator/health 통과 시 완료
 ```
 
-### 사용 기술
+| 항목 | 값 |
+|------|-----|
+| 배포 경로 (서버) | `/home/woopi/project/safehome/api` |
+| 환경변수 파일 (서버) | `/home/<user>/project/safehome/env/.env_api` |
+| 이미지 태그 | `:dev` (최신) / `:dev-previous` (롤백용) — ghcr 무료 한도 500MB라 2개만 유지 |
+| Docker 네트워크 | `safehome-net` (최초 1회 `docker network create`) |
+| 컴포즈 파일 | `docker/dev/` (dev) · `docker/prod/` (운영, 백업 스크립트 포함) |
 
-| 항목 | 내용 |
+**GitHub Secrets** (Environment: `dev`): `DEV_SSH_HOST` `DEV_SSH_USER` `DEV_SSH_PRIVATE_KEY` `DEV_SSH_PORT`
+
+**롤백**: 서버에서 compose 파일의 태그를 `:dev-previous`로 바꾸고 `docker compose up -d --no-deps safehome-api`.
+
+**DB 컨테이너**: `safehome-{dev|prod}-primary`(5432) / `-replica`(5433). API 컨테이너만 워크플로우가 교체하고 DB는 최초 1회 수동 기동한다.
+운영 백업은 `docker/prod/backup/backup.sh` (crontab 등록, 기본 보관 7일 — `.env`의 `BACKUP_RETENTION_DAYS`).
+
+> **PostgreSQL을 쓰는 이유**: AI 분석 결과를 JSON으로 다루는 구조에서 `jsonb` 인덱싱이 강력하고, H2와 문법 차이가 적어 마이그레이션 부담이 낮으며, BSD 라이선스로 종속성이 없다.
+
+---
+
+## 함정 & 결정 이유
+
+| 함정 | 내용 |
 |------|------|
-| CI/CD | GitHub Actions |
-| 이미지 레지스트리 | GitHub Container Registry (ghcr.io) |
-| 배포 방식 | SSH → docker compose pull & up |
-| 워크플로우 파일 | `.github/workflows/deploy-api-dev.yml` |
-
-### 트리거 조건
-
-```yaml
-on:
-  push:
-    branches: [develop]
-    paths:
-      - 'project-safehome-api/**'
-```
-
-`project-safehome-api/` 하위 파일이 변경된 push에만 실행됩니다.
-
-### 배포 흐름
-
-| 단계 | 위치 | 내용 |
-|------|------|------|
-| 1. 코드 push | 로컬 → GitHub | `git push origin develop` |
-| 2. 이미지 빌드 | GitHub Actions 러너 | Dockerfile 멀티스테이지 빌드 (JDK21 → JRE21) |
-| 3. 이미지 push | 러너 → ghcr.io | `ghcr.io/<owner>/safehome-api` |
-| 4. SSH 접속 | 러너 → 개발 서버 | `appleboy/ssh-action` |
-| 5. 이미지 pull | 개발 서버 → ghcr.io | `docker compose pull safehome-api` |
-| 6. 컨테이너 교체 | 개발 서버 | `docker compose up -d --no-deps safehome-api` |
-| 7. Spring Boot 기동 | 개발 서버 | `/actuator/health` healthcheck 통과 시 완료 |
-
-### 이미지 태그 전략
-
-```
-ghcr.io/<owner>/safehome-api:dev           ← 항상 최신 develop
-ghcr.io/<owner>/safehome-api:dev-previous  ← 직전 버전 (롤백용)
-```
-
-용량 절약을 위해 태그 2개만 유지합니다. (무료 계정 ghcr.io 한도 500MB)
-
-### 롤백
-
-문제 발생 시 서버에서:
-
-```bash
-cd /home/<username>/project/safehome
-
-sed -i 's/:dev$/:dev-previous/' docker-compose.yml
-docker compose up -d --no-deps safehome-api
-
-# 확인 후 원복
-sed -i 's/:dev-previous$/:dev/' docker-compose.yml
-```
-
-### GitHub Secrets 설정
-
-레포 → Settings → Environments → dev → Environment secrets
-
-| Secret | 값 |
-|--------|----|
-| `DEV_SSH_HOST` | 개발 서버 IP |
-| `DEV_SSH_USER` | |
-| `DEV_SSH_PRIVATE_KEY` | SSH 개인키 전체 내용 |
-| `DEV_SSH_PORT` | |
-
-### 서버 사전 준비 (최초 1회)
-
-```bash
-# 1. Docker 네트워크 생성 (서비스 간 통신용 공유 네트워크)
-docker network create safehome-net
-
-# 2. 환경변수 파일 작성
-mkdir -p /home/<username>/project/safehome/env
-cp docker/dev/.env.template /home/<username>/project/safehome/env/.env_api
-nano /home/<username>/project/safehome/env/.env_api
-# GITHUB_OWNER, POSTGRES_PASSWORD 등 실제 값으로 수정
-
-# 3. GitHub Actions용 SSH 키 생성
-ssh-keygen -t ed25519 -f ~/.ssh/github_actions -N ""
-cat ~/.ssh/github_actions.pub >> ~/.ssh/authorized_keys
-chmod 600 ~/.ssh/authorized_keys
-
-# 4. DB 컨테이너 최초 기동 (API 컨테이너는 워크플로우가 기동)
-cd /home/<username>/project/safehome
-docker compose -f docker/dev/docker-compose.yml up -d postgres-primary postgres-replica
-```
+| **`prod` vs `prd` 프로파일** | `application-swagger.yml`만 `on-profile: prod`이고 나머지는 전부 `prd`다. 현재 `prd`로 뜨면 Swagger 비활성 설정이 적용되지 않는다. 수정 시 `prd`로 통일할 것 |
+| **스키마 파일 2벌** | H2용·PostgreSQL용을 따로 관리한다. 한쪽만 고치면 로컬은 되는데 dev에서 깨진다 |
+| **`@JsonRawValue`** | `JobDetail.result`는 문자열 필드지만 JSON 원본으로 내려간다. 클라이언트가 이중 파싱해야 할 수 있다 |
+| **SSE 연결 끊김** | `AsyncRequestNotUsableException`은 클라이언트가 먼저 끊은 정상 케이스다. 에러로 처리하지 말 것 (`SseNotifierAdapter`) |
+| **푸시 실패는 무시** | 분석 결과 저장이 끝난 뒤 발송하므로 pigeon 장애가 분석을 실패시키면 안 된다 |
+| **Redis 장애도 무시** | `LlmCacheAdapter`는 예외를 삼키고 캐시 미스처럼 동작한다. AI API 호출로 폴백 |
+| **`deed → auth` 의존** | 단방향만 허용. FCM 토큰 조회는 `UserDeviceQueryPort` + `UserDeviceQueryAdapter`로 격리했다. auth는 deed를 모른다 |
+| **캐시 무효화 없음** | 등기부는 문서마다 고유해 히트율이 낮다. 전체 무효화가 필요하면 `KEY_PREFIX` 버전을 올린다 (`v2`→`v3`). 이유 → [`docs/llm-cache-strategy.md`](docs/llm-cache-strategy.md) |
 
 ---
 
@@ -332,6 +187,18 @@ docker compose -f docker/dev/docker-compose.yml up -d postgres-primary postgres-
 ```bash
 ./gradlew test
 ```
+Kotest `BehaviorSpec` (Given/When/Then) + JUnit 5 Platform.
 
-- Kotest BDD BehaviorSpec (Given-When-Then)
-- JUnit 5 Platform
+---
+
+## 문서 지도
+
+| 알고 싶은 것 | 문서 |
+|-------------|------|
+| 도메인 공통 구조·레이어 책임·의존 규칙 | [`domain/README.md`](src/main/kotlin/com/woopi/safehome/domain/README.md) |
+| auth 도메인 상세 | [`domain/auth/README.md`](src/main/kotlin/com/woopi/safehome/domain/auth/README.md) |
+| deed 도메인 상세 | [`domain/deed/README.md`](src/main/kotlin/com/woopi/safehome/domain/deed/README.md) |
+| 공통 인프라 (설정·예외·JWT·DataSource) | [`global/README.md`](src/main/kotlin/com/woopi/safehome/global/README.md) |
+| 프로파일·환경변수 전체 | [`resources/README.md`](src/main/resources/README.md) |
+| LLM 캐시 키·TTL·무효화 정책 | [`docs/llm-cache-strategy.md`](docs/llm-cache-strategy.md) |
+| AI 작업 지침 | [`CLAUDE.md`](CLAUDE.md) |

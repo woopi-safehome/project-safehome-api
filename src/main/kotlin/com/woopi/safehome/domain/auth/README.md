@@ -1,7 +1,12 @@
 # auth 도메인
 
-카카오 소셜 로그인, JWT 토큰 발급/갱신, 회원 탈퇴를 처리하는 인증 도메인.
+카카오 소셜 로그인, JWT 토큰 발급/갱신, 회원 탈퇴, FCM 디바이스 등록을 처리하는 인증 도메인.
 Spring Security 없이 `@CurrentUser` 커스텀 애노테이션과 `HandlerMethodArgumentResolver`로 인증을 처리한다.
+
+> **범위**: `domain/auth/**`
+> **상위**: [`domain/README.md`](../README.md) (레이어 규칙) · [API README](../../../../../../../../README.md)
+> **연관**: 엔드포인트 스펙 → 루트 README의 모듈 간 계약 · JWT 유틸 → [`global/README.md`](../../global/README.md)
+> **검증**: 클래스 목록은 이 디렉토리 트리와 1:1, 시그니처는 각 포트 인터페이스와 대조
 
 ---
 
