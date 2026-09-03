@@ -1,184 +1,77 @@
-# deed 도메인
+# deed — 등기부등본 분석 도메인
 
-등기부등본(PDF) 분석 요청을 받아 비동기로 처리하는 핵심 도메인.
-Job 생성, PDF 검증/파싱, 비동기 실행, SSE 알림, 결과 저장, 분석 이력 조회를 모두 담당한다.
+업로드된 문서를 비동기로 분석하고, 진행 상황을 실시간으로 알리고, 결과와 이력을 관리한다.
 
 > **범위**: `domain/deed/**`
 > **상위**: [`domain/README.md`](../README.md) (레이어 규칙) · [API README](../../../../../../../../README.md)
-> **연관**: 캐시 정책 → `docs/llm-cache-strategy.md` · 엔드포인트 스펙 → 루트 README의 모듈 간 계약
-> **검증**: 클래스 목록은 이 디렉토리 트리와 1:1, 시그니처는 각 포트 인터페이스와 대조
+> **연관**: 캐시 정책 → [`docs/llm-cache-strategy.md`](../../../../../../../docs/llm-cache-strategy.md) · 엔드포인트 스펙 → 저장소 README의 **App→API 계약** 절
+> **여기 없는 것**: 클래스·포트·메서드 목록 — 디렉터리와 코드가 답한다.
 
 ---
 
-## 패키지 구조
+## 책임과 경계
 
-```
-deed/
-├── adapter/
-│   ├── inbound/web/
-│   │   ├── DeedInboundWebAdapter         # REST 컨트롤러 (POST /api/deed/upload, GET /api/deed/jobs/{jobId}/stream, GET /api/deed/jobs/{jobId}, GET /api/deed/jobs)
-│   │   └── dto/
-│   │       ├── DeedRequest               # 요청 DTO (Upload: MultipartFile)
-│   │       └── DeedResponse              # 응답 DTO (UploadResult: jobId, JobDetail: 분석 결과 포함, JobSummary: 목록용 요약)
-│   └── outbound/
-│       ├── PdfBoxParserAdapter           # PdfParserPort 구현체 (PDFBox로 PDF 파싱)
-│       ├── PdfValidationAdapter          # PdfValidationPort 구현체 (PDF 유효성 검증)
-│       ├── SseNotifierAdapter            # SseNotifierPort 구현체 (SSE Emitter 관리)
-│       ├── LlmAnalysisAdapter            # LlmAnalysisPort 구현체 (AI API HTTP 호출)
-│       ├── LlmCacheAdapter               # LlmCachePort 구현체 (Redis 캐시 조회/저장, TTL 7일)
-│       ├── PigeonNotificationAdapter     # NotificationPort 구현체 (pigeon 서비스 HTTP 호출)
-│       ├── UserDeviceQueryAdapter        # UserDeviceQueryPort 구현체 (auth 도메인 Repository 직접 사용)
-│       └── persistence/
-│           ├── JobPersistenceAdapter     # JobPersistencePort 구현체 (JPA 저장/조회)
-│           └── jpa/
-│               ├── AnalysisJobEntity     # JPA 엔티티 (BaseEntity 상속, user_id/safety_level/address 포함)
-│               ├── AnalysisJobEntityMapper # Entity <-> Domain Model 변환
-│               └── AnalysisJobRepository # Spring Data JPA Repository
-│
-├── application/
-│   ├── port/
-│   │   ├── inbound/
-│   │   │   ├── DeedUseCase               # 등기부 분석 인터페이스 (uploadDeed/streamJob/getJob/getMyJobs)
-│   │   │   ├── AnalysisExecutorPort      # 비동기 분석 실행 인터페이스
-│   │   │   └── command/
-│   │   │       └── DeedCommand           # UseCase 입력 커맨드 (Upload: userId 포함)
-│   │   └── outbound/
-│   │       ├── JobPersistencePort        # Job CRUD 포트 (create/findByJobId/findByUserId/updateStatus/complete)
-│   │       ├── SseNotifierPort           # SSE Emitter 발급 및 이벤트 전송 포트
-│   │       ├── PdfParserPort             # PDF 파싱 포트 (ByteArray → DeedSections)
-│   │       ├── PdfValidationPort         # PDF 유효성 검증 포트 (ByteArray, contentType)
-│   │       ├── LlmAnalysisPort           # LLM 분석 포트 (DeedSections → 분석 결과 JSON)
-│   │       ├── LlmCachePort              # LLM 응답 캐시 포트 (섹션 해시 기반 Redis 캐시)
-│   │       ├── NotificationPort          # FCM 푸시 발송 포트 (sendPush)
-│   │       └── UserDeviceQueryPort       # 사용자 FCM 토큰 조회 포트 (findTokensByUserId)
-│   ├── service/
-│   │   └── AnalysisAsyncProcessor        # AnalysisExecutorPort 구현체 (@Async 비동기 처리, 완료 시 safetyLevel/address 추출)
-│   └── usecase/
-│       └── DeedUseCaseImpl               # Job 생성 → 비동기 실행 트리거(uploadDeed) / SSE 구독(streamJob), 소유권 검증 포함
-│
-└── domain/
-    ├── exception/
-    │   └── InvalidPdfException           # PDF 검증 실패 예외
-    └── model/
-        ├── AnalysisJob                   # 분석 Job 도메인 모델 (Create / Data — userId, safetyLevel, address, createdAt 포함)
-        └── DeedSections                  # 등기부등본 섹션 모델 (표제부/갑구/을구)
-```
+| 이 도메인이 답하는 것 | 답하지 않는 것 |
+|---|---|
+| 이 문서를 분석해 달라 | 무엇이 위험한가 (AI 분석 서버 소관) |
+| 지금 어디까지 진행됐나 | 화면에 어떻게 보일까 (앱 소관) |
+| 내가 맡긴 분석의 이력 | 누구에게 알림을 보낼 수 있나 (인증 도메인 소관) |
+
+**판정하지 않는다.** 분석 결과를 받아 저장하고 통과시킬 뿐, 내용을 해석하지 않는다.
 
 ---
 
-## 요청 흐름
+## 관통 흐름
 
-### ① PDF 업로드 (POST /api/deed/upload)
-
-```
-DeedInboundWebAdapter (POST /api/deed/upload)
-  → DeedUseCase.uploadDeed(DeedCommand.Upload)
-    → DeedUseCaseImpl
-        1. JobPersistencePort.create()       # Job DB 저장 (PENDING, userId 포함)
-        2. AnalysisExecutorPort.execute()    # 트랜잭션 커밋 후 비동기 분석 실행 트리거
-        3. return jobId (String)             # 클라이언트에 jobId 즉시 반환
-      ↓ (별도 스레드 — afterCommit)
-    AnalysisAsyncProcessor (@Async)
-        1. updateAndNotify(IN_PROGRESS, PDF_PARSING)
-        2. PdfValidationPort.validate()      # PDF 유효성 검증
-        3. PdfParserPort.parse()             # 섹션 파싱
-        4. updateAndNotify(IN_PROGRESS, LLM_ANALYSIS)
-        5. LlmCachePort.get(sectionHash)     # Redis 캐시 조회 (섹션 텍스트 SHA-256 해시)
-           └ 캐시 미스 시: LlmAnalysisPort.analyze() → LlmCachePort.put()
-        6. updateAndNotify(IN_PROGRESS, POST_PROCESSING)
-        7. extractSummaryFields()            # result JSON에서 safetyLevel/address 추출
-        8. JobPersistencePort.complete()     # 결과 저장 (COMPLETED, safetyLevel, address 포함)
-        9. SseNotifierPort.notifyStep()      # COMPLETED 이벤트 전송
-       10. userId != null 이면 FCM 푸시 발송
-           ├─ UserDeviceQueryPort.findTokensByUserId(userId)  # 등록된 FCM 토큰 목록 조회
-           └─ NotificationPort.sendPush(tokens, jobId)        # pigeon 서비스로 발송 요청
-```
-
-### ② SSE 구독 (GET /api/deed/jobs/{jobId}/stream)
+업로드 요청은 **작업을 만들고 즉시 식별자를 돌려준다.** 분석은 그 뒤 별도 스레드에서 진행된다.
+클라이언트는 식별자로 진행 상황을 구독하거나 나중에 결과를 조회한다.
 
 ```
-DeedInboundWebAdapter (GET /api/deed/jobs/{jobId}/stream)
-  → DeedUseCase.streamJob(jobId, userId)
-    → DeedUseCaseImpl
-        1. JobPersistencePort.findByJobId()  # Job 존재 확인 + 소유권 검증
-        2. SseNotifierPort.createEmitter()   # SSE Emitter 발급 (jobId로 등록)
-        3. 이미 COMPLETED/FAILED인 경우
-           └ SseNotifierPort.notifyStep()    # 최종 상태 즉시 전송 후 emitter 닫음
-        4. return SseEmitter                 # 클라이언트에 반환 (진행 중이면 비동기 알림 대기)
+업로드 → 작업 생성(대기) → [응답: 식별자]
+                              ↓ 트랜잭션 커밋 후 비동기 시작
+          문서 검증 → 텍스트 추출 → 분석(캐시 확인 후 필요할 때만 외부 호출)
+          → 요약 정보 추출 → 결과 저장(완료) → 진행 알림 → 푸시 발송
 ```
 
-### ③ Job 조회 / 이력 목록
-
-```
-DeedInboundWebAdapter (GET /api/deed/jobs/{jobId})
-  → DeedUseCase.getJob(jobId, userId)       # 소유권 검증 (job.userId != userId → FORBIDDEN)
-
-DeedInboundWebAdapter (GET /api/deed/jobs)
-  → DeedUseCase.getMyJobs(userId, pageable) # 내 분석 이력 목록 (최신순 페이징)
-```
-
-분석 진행 상태: `PENDING → IN_PROGRESS (PDF_PARSING → LLM_ANALYSIS → POST_PROCESSING) → COMPLETED / FAILED`
+각 단계 전환마다 구독 중인 클라이언트에게 상태를 밀어 보낸다.
+상태와 단계의 허용값은 저장소 README의 계약 절에 있다.
 
 ---
 
-## 클래스 역할
+## 불변식
 
-### adapter/inbound
+- **비동기 작업은 트랜잭션이 커밋된 뒤에 시작해야 한다.**
+  먼저 띄우면 그 스레드가 **아직 존재하지 않는 작업을 조회**한다. 타이밍에 따라 되기도 해서 재현이 어렵다.
+- **구독이 늦어도 결과를 놓치지 않는다.** 구독 시점에 작업이 이미 끝나 있으면
+  최종 상태를 즉시 보내고 연결을 닫는다. 이 처리가 없으면 **빠르게 끝난 분석에서 클라이언트가 영원히 기다린다.**
+- **남의 작업은 볼 수 없다.** 조회·구독 모두 요청자와 작업 소유자가 같은지 확인한다.
+  식별자를 알아도 접근할 수 없어야 한다.
+- **작업은 실패해도 남는다.** 실패 상태와 사유를 기록한다. 조용히 사라지면 사용자가 원인을 알 수 없다.
 
-| 클래스 | 역할 |
-|--------|------|
-| `DeedInboundWebAdapter` | `POST /api/deed/upload` (PDF 업로드 → jobId 반환), `GET /api/deed/jobs/{jobId}/stream` (SSE 구독), `GET /api/deed/jobs/{jobId}` (결과 조회), `GET /api/deed/jobs` (내 이력 목록) |
-| `DeedRequest` | 요청 DTO. `Upload`: `MultipartFile` + `leaseType` |
-| `DeedResponse` | 응답 DTO. `UploadResult`: jobId / `JobDetail`: 분석 결과 포함(`result`는 `@JsonRawValue`) / `JobSummary`: 목록용 요약 (safetyLevel, address, createdAt, leaseType) |
+---
 
-### adapter/outbound
+## 실패를 어떻게 다루는가
 
-| 클래스 | 역할 |
-|--------|------|
-| `PdfBoxParserAdapter` | Apache PDFBox로 PDF 바이트를 파싱해 `DeedSections` 반환 |
-| `PdfValidationAdapter` | 바이트 배열 비어 있음 여부 및 `contentType == application/pdf` 검증 |
-| `SseNotifierAdapter` | `ConcurrentHashMap<jobId, SseEmitter>` 관리. Emitter 생성 및 이벤트 전송 (타임아웃 5분). 클라이언트 연결 끊김(`AsyncRequestNotUsableException`) 시 에러 처리 없이 정리 |
-| `LlmAnalysisAdapter` | `RestTemplate`으로 AI API(`POST /api/deed/analyze`) 호출. `DeedSections` → 분석 결과 JSON String 반환 |
-| `LlmCacheAdapter` | `StringRedisTemplate`으로 LLM 응답 캐싱. 키: `llm:deed:v2:{sha256}:{leaseType}`, TTL: 7일. Redis 장애 시 예외를 삼키고 캐시 미스처럼 동작 |
-| `JobPersistenceAdapter` | `AnalysisJobRepository`를 통해 Job 생성/상태 갱신/완료 처리/유저별 목록 조회 |
-| `PigeonNotificationAdapter` | `RestClient`로 pigeon 서비스(`POST /api/messages/send`) 호출. 각 FCM 토큰별 "분석 완료" 푸시 발송. 실패 시 error 로그 기록 후 무시. pigeon이 `TOKEN_UNREGISTERED(400)` 반환 시 해당 토큰을 `user_devices`에서 삭제 |
-| `UserDeviceQueryAdapter` | auth 도메인의 `UserDeviceRepository`를 직접 주입받아 userId로 등록된 FCM 토큰 목록 조회(`findTokensByUserId`) 및 만료 토큰 삭제(`deleteByFcmToken`) |
-| `AnalysisJobEntity` | `BaseEntity` 상속 JPA 엔티티 (jobId, fileName, fileSize, status, step, result, description, userId, safetyLevel, address) |
-| `AnalysisJobEntityMapper` | `AnalysisJobEntity` ↔ `AnalysisJob.Data` 변환 |
-| `AnalysisJobRepository` | Spring Data JPA Repository (`findByJobId`, `findByUserIdOrderByCreatedAtDesc`) |
+| 무엇이 실패하면 | 어떻게 되나 |
+|---|---|
+| 문서 검증·추출 | 작업을 실패로 기록하고 사유를 남긴다. 사용자에게 보이는 실패다 |
+| 캐시 | **무시한다.** 미스처럼 취급하고 외부 호출로 넘어간다 |
+| 외부 분석 서버 | 작업 실패. 다만 타임아웃을 두어 요청이 매달리지 않게 한다 |
+| 알림 스트림 끊김 | **정상으로 본다.** 클라이언트가 먼저 끊는 경우가 흔하다. 에러로 처리하면 로그가 오염된다 |
+| 푸시 발송 | **무시한다.** 결과 저장이 끝난 뒤에 보내므로, 발송 실패가 분석을 되돌리면 안 된다 |
 
-### application/port/inbound
+원칙은 하나다 — **결과를 만드는 일은 실패로 다루고, 결과를 알리는 일은 실패해도 넘어간다.**
 
-| 인터페이스 | 역할 |
-|-----------|------|
-| `DeedUseCase` | `uploadDeed(DeedCommand.Upload): String`, `streamJob(jobId, userId): SseEmitter`, `getJob(jobId, userId): AnalysisJob.Data`, `getMyJobs(userId, pageable): Page<AnalysisJob.Data>` |
-| `AnalysisExecutorPort` | `execute(jobId, fileBytes, contentType, leaseType, userId)` — 비동기 분석 실행 진입점 |
-| `DeedCommand` | UseCase 입력 커맨드 객체. `Upload(file, fileName, fileSize, userId, leaseType?)` |
+---
 
-### application/port/outbound
+## 설계 결정
 
-| 인터페이스 | 역할 |
-|-----------|------|
-| `JobPersistencePort` | Job 생성(`create`), 단건 조회(`findByJobId`), 유저별 목록 조회(`findByUserId`), 상태 갱신(`updateStatus`), 완료(`complete`) |
-| `SseNotifierPort` | Emitter 발급(`createEmitter`), 단계 이벤트 전송(`notifyStep`) |
-| `PdfParserPort` | `parse(ByteArray): DeedSections` |
-| `PdfValidationPort` | `validate(ByteArray, contentType?)` — 실패 시 `InvalidPdfException` |
-| `LlmAnalysisPort` | `analyze(sections, leaseType): String` — AI API 호출로 분석 결과 JSON 반환 |
-| `LlmCachePort` | `get(sectionHash): String?`, `put(sectionHash, result)` — LLM 응답 캐시 인터페이스. `sectionHash`는 `{sha256}:{leaseType}` 형태 |
-| `NotificationPort` | FCM 푸시 발송 포트 (`sendPush(fcmTokens, jobId)`) |
-| `UserDeviceQueryPort` | 사용자 FCM 토큰 조회(`findTokensByUserId`) 및 만료 토큰 삭제(`deleteByFcmToken`) 포트 |
+**분석 결과를 캐시한다.** 키는 추출된 텍스트의 해시다. 같은 문서를 다시 올리면 외부 호출을 건너뛴다.
+개별 무효화 수단은 없다 — 입력이 문서마다 고유해 히트율이 낮고, 전체를 비우려면 키 버전을 올리면 되기 때문이다.
+**상류의 프롬프트나 판정 기준이 바뀌면 반드시 버전을 올려야 한다.** 안 그러면 옛 결과가 계속 나간다.
 
-### application/service & usecase
+**완료 시 결과에서 요약 정보를 뽑아 별도 컬럼에 저장한다.** 이력 목록에서 결과 전문을 파싱하지 않기 위해서다.
+결과 구조가 바뀌면 이 추출도 함께 봐야 한다.
 
-| 클래스 | 역할 |
-|--------|------|
-| `AnalysisAsyncProcessor` | `@Async` 비동기 분석 실행. PDF 검증 → 파싱 → LLM 분석 → 상태 갱신 → SSE 알림. 완료 시 result JSON에서 safetyLevel/address 추출 저장 |
-| `DeedUseCaseImpl` | PDF 업로드·Job 생성·비동기 트리거(`uploadDeed`), SSE Emitter 발급·완료 시 즉시 전송(`streamJob`), 소유권 검증 후 단건 조회(`getJob`), 유저별 목록 조회(`getMyJobs`) |
-
-### domain
-
-| 클래스 | 역할 |
-|--------|------|
-| `InvalidPdfException` | PDF 검증 실패 시 던지는 도메인 예외 |
-| `AnalysisJob` | 분석 Job 도메인 모델. `Create` (userId 포함), `Data` (userId, safetyLevel, address, createdAt 포함) |
-| `DeedSections` | 등기부등본 섹션 맵. `get(name)`, `hasSection(name)`, `sectionNames()` |
+**다른 도메인의 데이터는 포트로 가져온다.** 알림 대상을 알아내야 하지만,
+상대 도메인은 이 도메인의 존재를 모른 채로 남는다.

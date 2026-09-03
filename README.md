@@ -4,44 +4,45 @@
 AI 분석 자체는 하지 않는다 — AI API에 위임한다.
 
 > **범위**: `project-safehome-api/**`
-> **연관**: [루트 README](../README.md) (모듈 간 계약·기동 순서) · [AI API README](../project-safehome-ai-api/README.md)
-> **검증**: 이 문서의 엔드포인트는 `*InboundWebAdapter`, 설정값은 `src/main/resources/application-*.yml`과 대조
+> **연관**: [AI API README](../project-safehome-ai-api/README.md) — API→AI API 계약의 원본 (워크스페이스에 함께 있을 때만 유효한 링크)
+> **여기 없는 것**: 클래스 이름과 라이브러리 버전 — 코드와 `build.gradle.kts`가 답한다.
+> 아래 계약 절은 웹 어댑터·설정 파일과 대조해 확인한다.
 
 ---
 
 ## TL;DR
 
-| 항목 | 값 |
-|------|-----|
-| 스택 | Kotlin 2.1.0 / Spring Boot 3.5.8 / JDK 21 / Gradle Kotlin DSL |
-| 아키텍처 | 헥사고날 (Ports & Adapters) + DDD |
-| DB | `local`: H2 파일(MySQL 모드) · `dev`/`prd`: PostgreSQL Primary/Replica |
-| 캐시 | Redis (`local`은 임베디드) |
-| 진입점 | `SafehomeApplication.kt` → `domain/{auth,deed}/adapter/inbound/web/` |
-| 주요 라이브러리 | PDFBox 3.0.3, jjwt 0.12.6, SpringDoc 2.8.9, Sentry 7.14.0, Kotest 5.9.1 |
+인증, 문서 파싱, 분석 작업 관리, 결과 캐싱, 진행 상황 실시간 알림, 푸시 발송을 담당한다.
+**AI 분석 자체는 하지 않는다** — 외부 분석 서버에 위임하고 결과를 통과시킨다.
+
+헥사고날 아키텍처. 도메인마다 독립된 헥사곤을 이루며, 구조는
+[`domain/README.md`](src/main/kotlin/com/woopi/safehome/domain/README.md)가 기준이다.
 
 ```bash
-./gradlew bootRun                     # :8080 (local 프로파일)
+./gradlew bootRun                     # 개발 서버 (로컬 프로파일)
 ./gradlew build -x test               # 빌드
 ./gradlew test                        # 전체 테스트
 ./gradlew test --tests "*ClassName"   # 단일 클래스
 ```
 
-Swagger: http://localhost:8080/swagger-ui.html · H2 Console: http://localhost:8080/h2-console
+로컬은 환경 변수 없이 그대로 뜬다. API 문서와 DB 콘솔 주소는 아래 **설정** 절 참조.
+스택과 라이브러리 버전은 `build.gradle.kts`가 답한다.
 
 ---
 
 ## 작업 레시피
 
-| 하려는 일 | 건드릴 파일 (순서대로) |
-|-----------|----------------------|
-| **새 엔드포인트 추가** | `application/port/inbound/{X}UseCase` → `application/usecase/{X}UseCaseImpl` → `adapter/inbound/web/{X}InboundWebAdapter` → `adapter/inbound/web/dto/` → 도메인 `README.md` |
-| **새 외부 시스템 연동** | `application/port/outbound/{X}Port` (인터페이스 먼저) → `adapter/outbound/{X}Adapter` → `application-*.yml`에 URL 추가 → `resources/README.md` |
-| **새 도메인 추가** | `domain/_sample/` 통째로 복사 → 이름 변경 → `domain/README.md` 도메인 목록에 추가 |
-| **분석 단계 추가/변경** | `global/enums/AnalysisStep` → `application/service/AnalysisAsyncProcessor` → 루트 README의 SSE 계약 → App의 `AnalysisStep` enum |
-| **DB 컬럼 추가** | `resources/init/postgresql/schema.sql` + `init/h2db/schema.sql` **양쪽** → `*Entity` → `*EntityMapper` → 도메인 모델 |
-| **에러 코드 추가** | `global/exception/ErrorCode` → 루트 README의 에러 코드 목록 |
-| **캐시 동작 변경** | `adapter/outbound/LlmCacheAdapter` → `docs/llm-cache-strategy.md` |
+파일 이름이 아니라 **순서**가 중요하다. 실제 위치는 [`domain/README.md`](src/main/kotlin/com/woopi/safehome/domain/README.md)의 표준 구조를 따른다.
+
+| 하려는 일 | 순서 |
+|-----------|------|
+| **새 엔드포인트 추가** | 인바운드 포트 → 유스케이스 → 웹 어댑터 → 요청·응답 형식 → 도메인 README |
+| **새 외부 시스템 연동** | 아웃바운드 포트(**인터페이스 먼저**) → 어댑터 → 설정에 주소 추가 → [`resources/README.md`](src/main/resources/README.md) |
+| **새 도메인 추가** | [`domain/README.md`](src/main/kotlin/com/woopi/safehome/domain/README.md)의 표준 구조를 따르고, 도메인 README를 함께 만든다 |
+| **분석 단계 추가·변경** | 단계 열거값 → 비동기 처리부 → 아래 **App→API 계약** 절 → 앱의 같은 열거값 |
+| **DB 컬럼 추가** | **스키마 파일 양쪽 모두** → 엔티티 → 매퍼 → 도메인 모델 |
+| **에러 코드 추가** | 에러 코드 열거값 → 아래 **App→API 계약** 절 |
+| **캐시 동작 변경** | 캐시 어댑터 → [`docs/llm-cache-strategy.md`](docs/llm-cache-strategy.md) |
 
 ---
 
@@ -64,63 +65,145 @@ src/main/kotlin/com/woopi/safehome/
 
 ---
 
-## API 엔드포인트
+## App→API 계약
 
-요청/응답 스펙과 SSE 이벤트 형식은 **[루트 README의 모듈 간 API 계약](../README.md#모듈-간-api-계약)** 이 원본이다. 여기는 구현 위치만 매핑한다.
+> ⚠️ **이 절은 계약이다.** 다른 절과 달리 값이 정확해야 하며, 클라이언트가 여기에 맞춘다.
+> 형식을 바꾸면 이 절을 **같은 커밋에서** 갱신하고, 배포된 클라이언트가 깨지지 않는지 확인한다.
+> 필드 추가는 안전하지만 **제거·개명은 전파를 먼저 계획**한다.
 
-| 엔드포인트 | 구현 클래스 | 인증 |
-|-----------|------------|:---:|
-| `POST /api/auth/kakao` | `AuthInboundWebAdapter` | — |
-| `POST /api/auth/refresh` | `AuthInboundWebAdapter` | — |
-| `POST /api/users/devices` | `UserInboundWebAdapter` | 🔒 |
-| `DELETE /api/users/me` | `UserInboundWebAdapter` | 🔒 |
-| `POST /api/deed/upload` | `DeedInboundWebAdapter` | 🔒 |
-| `GET /api/deed/jobs/{jobId}/stream` | `DeedInboundWebAdapter` | 🔒 |
-| `GET /api/deed/jobs/{jobId}` | `DeedInboundWebAdapter` | 🔒 |
-| `GET /api/deed/jobs` | `DeedInboundWebAdapter` | 🔒 |
+### 공통 규약
 
-🔒 = `@CurrentUser userId: Long` 파라미터로 인증. Spring Security를 쓰지 않고 `CurrentUserArgumentResolver`가 `Authorization: Bearer` 헤더를 직접 해석한다.
+**인증** — 보호된 엔드포인트는 `Authorization: Bearer <accessToken>` 헤더를 요구한다.
+Spring Security를 쓰지 않고 인자 리졸버가 헤더를 직접 해석한다.
+
+**응답 봉투** — 모든 JSON 응답은 아래 형태로 감싸인다. `type` 이 판별 필드다.
+
+```jsonc
+// 성공
+{ "type": "success", "data": { ... }, "message": "Success", "pagination": null }
+
+// 실패
+{ "type": "error", "code": "NOT_FOUND", "message": "...", "details": null }
+```
+
+**페이징** — 목록 응답의 `data` 는 `{ items: [...], pagination: {...} }` 이고,
+`pagination` 은 `currentPage`(1부터) · `totalPages` · `totalElements` · `size` ·
+`hasNext` · `hasPrevious` · `isFirst` · `isLast` 를 갖는다.
+
+**에러 코드** — `code` 필드에 들어가는 값과 HTTP 상태:
+
+| code | HTTP |
+|---|---|
+| `VALIDATION_FAILED` · `CONSTRAINT_VIOLATION` | 400 |
+| `UNAUTHORIZED` | 401 |
+| `FORBIDDEN` | 403 |
+| `NOT_FOUND` | 404 |
+| `KAKAO_API_ERROR` | 502 |
+| `INTERNAL_SERVER_ERROR` | 500 |
+
+**공유 열거값** — 클라이언트도 같은 값을 쓴다. 문자열 하드코딩 금지.
+
+| 열거 | 값 |
+|---|---|
+| 분석 상태 | `PENDING` · `IN_PROGRESS` · `COMPLETED` · `FAILED` |
+| 분석 단계 | `PDF_PARSING` · `LLM_ANALYSIS` · `POST_PROCESSING` |
+| 안전 등급 | `SAFE` · `CAUTION` · `DANGER` |
+
+### 인증
+
+| | |
+|---|---|
+| `POST /api/auth/kakao` | 카카오 로그인 / 회원가입 |
+| 요청 | `{ "kakaoAccessToken": string }` |
+| 응답 `data` | `{ "accessToken": string, "refreshToken": string, "expiresIn": number, "isNewUser": boolean }` |
+
+| | |
+|---|---|
+| `POST /api/auth/refresh` | 액세스 토큰 재발급 |
+| 요청 | `{ "refreshToken": string }` |
+| 응답 `data` | `{ "accessToken": string, "refreshToken": string, "expiresIn": number }` |
+
+### 사용자 🔒
+
+| | |
+|---|---|
+| `POST /api/users/devices` | FCM 디바이스 토큰 등록 (동일 토큰 재등록은 upsert) |
+| 요청 | `{ "fcmToken": string }` — 빈 문자열 불가 |
+| 응답 `data` | 없음 |
+
+| | |
+|---|---|
+| `DELETE /api/users/me` | 회원 탈퇴 (카카오 연결 해제 포함) |
+| 응답 `data` | 없음 |
+
+### 등기부등본 분석 🔒
+
+| | |
+|---|---|
+| `POST /api/deed/upload` | PDF 업로드 → 분석 Job 생성 |
+| 요청 | `multipart/form-data` — `file` (PDF, 필수) · `leaseType` (`전세` \| `월세`, 선택) |
+| 응답 `data` | `{ "jobId": string }` |
+
+| | |
+|---|---|
+| `GET /api/deed/jobs/{jobId}/stream` | 분석 진행 상황 구독 (SSE) |
+| 응답 | `text/event-stream`. **봉투로 감싸지 않는다** — 아래 이벤트 페이로드를 그대로 보낸다 |
+| 이벤트 | `{ "jobId": string, "status": 분석상태, "step": 분석단계 \| null, "message": string, "timestamp": ISO-8601 }` |
+| 종료 | `status` 가 `COMPLETED` 또는 `FAILED` 이면 서버가 스트림을 닫는다 |
+
+| | |
+|---|---|
+| `GET /api/deed/jobs/{jobId}` | Job 단건 조회 |
+| 응답 `data` | `{ "jobId": string, "fileName": string, "fileSize": number, "status": 분석상태, "step": 분석단계 \| null, "description": string \| null, "result": object \| null }` |
+
+> `result` 는 **JSON 객체를 그대로** 내려준다(문자열로 감싸지 않음). 분석이 끝나기 전에는 `null`.
+> 그 내부 구조는 AI 분석 서버가 정하는 계약이며, 이 서버는 통과시키기만 한다.
+
+| | |
+|---|---|
+| `GET /api/deed/jobs` | 내 분석 이력 목록 |
+| 쿼리 | `page` (0부터, 기본 0) · `size` (기본 20) |
+| 응답 `data` | `{ "items": [ ... ], "pagination": { ... } }` |
+| `items[]` | `{ "jobId": string, "fileName": string, "fileSize": number, "status": 분석상태, "safetyLevel": 안전등급 \| null, "address": string \| null, "createdAt": ISO-8601 \| null, "leaseType": string \| null }` |
+
+> 요청의 `page` 는 0부터, 응답 `pagination.currentPage` 는 1부터다. 서로 기준이 다르다.
 
 ---
 
 ## 핵심 패턴
 
-### 응답 / 예외
+### 응답과 예외
 
-```kotlin
-ApiResponse.success(data)                    // { type: "success", data, message }
-throw BusinessException(ErrorCode.NOT_FOUND) // → GlobalExceptionHandler → { type: "error", code, message }
-```
-`ErrorCode` enum이 HTTP status·코드·기본 메시지를 한 곳에서 관리한다.
+성공은 공통 봉투로 감싸고, 실패는 **정해진 예외를 던지면** 전역 핸들러가 봉투로 변환한다.
+HTTP 상태·에러 코드·기본 메시지는 열거값 한 곳에서 관리하므로, 컨트롤러가 상태 코드를 직접 정하지 않는다.
 
-### Read/Write DataSource 라우팅
+### 읽기/쓰기 데이터소스 분기
 
-```
-@Transactional(readOnly = true) → DataSourceContextHolder(READ)  → Replica
-@Transactional                  → DataSourceContextHolder(WRITE) → Primary
-```
-`DataSourceTransactionInterceptor` → `RoutingDataSource`. 상세 → [`global/README.md`](src/main/kotlin/com/woopi/safehome/global/README.md)
+**트랜잭션 애노테이션의 읽기 여부가 커넥션을 결정한다.** 읽기 전용이면 복제본으로, 아니면 주 인스턴스로 간다.
+컨텍스트를 직접 조작하지 말고 애노테이션만 정확히 붙인다 — 빠뜨려도 동작은 정상이라 드러나지 않는다.
+
+상세 → [`global/README.md`](src/main/kotlin/com/woopi/safehome/global/README.md)
 
 ### 비동기 분석
 
-`DeedUseCaseImpl`이 Job을 저장하고 **트랜잭션 커밋 후**(`afterCommit`) `AnalysisAsyncProcessor.execute()`를 `@Async`로 띄운다.
-스레드풀은 `AsyncConfig`의 `analysisTaskExecutor` (core 4 / max 8 / queue 50).
-커밋 전에 띄우면 비동기 스레드가 아직 없는 Job을 조회하게 되므로 순서를 바꾸면 안 된다.
+Job을 저장하고 **트랜잭션이 커밋된 뒤에** 비동기 작업을 띄운다. 전용 스레드풀을 쓴다.
+
+> **순서를 바꾸면 안 된다.** 커밋 전에 띄우면 비동기 스레드가 **아직 존재하지 않는 Job을 조회**한다.
+> 타이밍에 따라 되기도 하고 안 되기도 해서 재현이 어렵다.
 
 ---
 
 ## 데이터베이스
 
-| 테이블 | 용도 | 비고 |
-|--------|------|------|
-| `analysis_jobs` | 분석 Job | `job_id` UNIQUE, `result`는 AI 응답 JSON 문자열 |
-| `users` | 카카오 회원 | `kakao_id` UNIQUE, 탈퇴는 `is_deleted` 소프트 딜리트 |
-| `user_devices` | FCM 토큰 | `fcm_token` UNIQUE → 재등록 시 upsert |
-| `samples`, `sample_details` | `_sample` 도메인용 | 운영 기능 아님 |
+| 테이블 | 용도 |
+|--------|------|
+| `analysis_jobs` | 분석 작업과 그 결과 |
+| `users` | 회원 (탈퇴는 소프트 딜리트) |
+| `user_devices` | 푸시 토큰 (재등록은 upsert) |
 
-- 스키마는 **Flyway가 아니라** `spring.sql.init`으로 적용된다. `ddl-auto: none` 고정.
-- 스키마 파일이 **H2용·PostgreSQL용 2벌**(`resources/init/h2db/`, `resources/init/postgresql/`)이다. 컬럼 추가 시 양쪽 모두 수정해야 한다.
-- 모든 테이블은 `BaseEntity`의 감사 컬럼(`created_id/at`, `updated_id/at`)을 가진다.
+- **자동 DDL을 쓰지 않는다.** 스키마는 초기화 SQL로만 적용되므로 엔티티를 바꿔도 테이블은 따라오지 않는다.
+- **스키마 파일이 두 벌이다** — 로컬용과 서버용. **한쪽만 고치면 로컬은 되고 서버에서 깨진다.**
+- 모든 테이블이 공통 감사 컬럼(생성·수정 주체와 시각)을 갖는다. 상속 기반 엔티티를 쓰면 자동으로 채워진다.
 
 ---
 
@@ -140,30 +223,19 @@ throw BusinessException(ErrorCode.NOT_FOUND) // → GlobalExceptionHandler → {
 
 ## 배포
 
-`develop` push → GitHub Actions(`.github/workflows/deploy-api-dev.yml`) → `ghcr.io` → SSH → 컨테이너 교체.
+기본 브랜치에 push하면 이미지를 빌드해 레지스트리에 올리고, 원격 서버에서 API 컨테이너만 교체한다.
+헬스 체크를 통과해야 완료로 본다. 서버 경로·비밀값 이름은 **배포 워크플로가 원본**이므로 여기 복제하지 않는다.
 
-```
-빌드(JDK21) → 이미지 push(ghcr.io/<owner>/safehome-api:dev)
-  → SSH(appleboy/ssh-action) → docker compose pull → up -d --no-deps
-  → /actuator/health 통과 시 완료
-```
+**롤백은 이전 태그로 되돌려 다시 띄운다.** 레지스트리 용량 한도 때문에 **직전 하나만 보관**하므로,
+두 단계 이상 되돌릴 수는 없다. 문제가 의심되면 빨리 판단해야 한다.
 
-| 항목 | 값 |
-|------|-----|
-| 배포 경로 (서버) | `/home/woopi/project/safehome/api` |
-| 환경변수 파일 (서버) | `/home/<user>/project/safehome/env/.env_api` |
-| 이미지 태그 | `:dev` (최신) / `:dev-previous` (롤백용) — ghcr 무료 한도 500MB라 2개만 유지 |
-| Docker 네트워크 | `safehome-net` (최초 1회 `docker network create`) |
-| 컴포즈 파일 | `docker/dev/` (dev) · `docker/prod/` (운영, 백업 스크립트 포함) |
+**DB 컨테이너는 워크플로가 건드리지 않는다.** 최초 한 번 수동으로 띄우고 이후 유지된다.
+API만 교체되므로 스키마 변경은 배포와 별개로 챙겨야 한다.
 
-**GitHub Secrets** (Environment: `dev`): `DEV_SSH_HOST` `DEV_SSH_USER` `DEV_SSH_PRIVATE_KEY` `DEV_SSH_PORT`
+**운영 백업은 스케줄로 돌고 보관 기간이 설정에 있다.** 기간을 넘긴 백업은 지워진다.
 
-**롤백**: 서버에서 compose 파일의 태그를 `:dev-previous`로 바꾸고 `docker compose up -d --no-deps safehome-api`.
-
-**DB 컨테이너**: `safehome-{dev|prod}-primary`(5432) / `-replica`(5433). API 컨테이너만 워크플로우가 교체하고 DB는 최초 1회 수동 기동한다.
-운영 백업은 `docker/prod/backup/backup.sh` (crontab 등록, 기본 보관 7일 — `.env`의 `BACKUP_RETENTION_DAYS`).
-
-> **PostgreSQL을 쓰는 이유**: AI 분석 결과를 JSON으로 다루는 구조에서 `jsonb` 인덱싱이 강력하고, H2와 문법 차이가 적어 마이그레이션 부담이 낮으며, BSD 라이선스로 종속성이 없다.
+> **관계형 DB 선택 이유**: 분석 결과를 JSON으로 다루는 구조라 JSON 인덱싱이 필요했고,
+> 로컬 개발용 DB와 문법 차이가 적어 이관 부담이 낮으며, 라이선스 종속성이 없다.
 
 ---
 
@@ -171,14 +243,14 @@ throw BusinessException(ErrorCode.NOT_FOUND) // → GlobalExceptionHandler → {
 
 | 함정 | 내용 |
 |------|------|
-| **`prod` vs `prd` 프로파일** | `application-swagger.yml`만 `on-profile: prod`이고 나머지는 전부 `prd`다. 현재 `prd`로 뜨면 Swagger 비활성 설정이 적용되지 않는다. 수정 시 `prd`로 통일할 것 |
-| **스키마 파일 2벌** | H2용·PostgreSQL용을 따로 관리한다. 한쪽만 고치면 로컬은 되는데 dev에서 깨진다 |
-| **`@JsonRawValue`** | `JobDetail.result`는 문자열 필드지만 JSON 원본으로 내려간다. 클라이언트가 이중 파싱해야 할 수 있다 |
-| **SSE 연결 끊김** | `AsyncRequestNotUsableException`은 클라이언트가 먼저 끊은 정상 케이스다. 에러로 처리하지 말 것 (`SseNotifierAdapter`) |
-| **푸시 실패는 무시** | 분석 결과 저장이 끝난 뒤 발송하므로 pigeon 장애가 분석을 실패시키면 안 된다 |
-| **Redis 장애도 무시** | `LlmCacheAdapter`는 예외를 삼키고 캐시 미스처럼 동작한다. AI API 호출로 폴백 |
-| **`deed → auth` 의존** | 단방향만 허용. FCM 토큰 조회는 `UserDeviceQueryPort` + `UserDeviceQueryAdapter`로 격리했다. auth는 deed를 모른다 |
-| **캐시 무효화 없음** | 등기부는 문서마다 고유해 히트율이 낮다. 전체 무효화가 필요하면 `KEY_PREFIX` 버전을 올린다 (`v2`→`v3`). 이유 → [`docs/llm-cache-strategy.md`](docs/llm-cache-strategy.md) |
+| **프로파일 이름 불일치** | 설정 파일 하나만 운영 프로파일 이름을 다르게 적고 있다. 그래서 운영으로 띄우면 그 파일의 설정이 적용되지 않는다. **에러 없이 의도와 다른 상태로 뜬다** |
+| **스키마 파일 두 벌** | 로컬용과 서버용을 따로 관리한다. 한쪽만 고치면 로컬은 되고 서버에서 깨진다 |
+| **분석 결과는 JSON 원본으로 나간다** | 문자열 필드지만 응답에서는 객체로 내려간다. 클라이언트가 이중 파싱해야 할 수 있다 |
+| **스트리밍 연결 끊김은 정상** | 클라이언트가 먼저 끊는 경우가 있다. 이때 발생하는 예외를 에러로 처리하면 로그가 오염되고 알림이 울린다 |
+| **푸시 실패는 무시한다** | 결과 저장이 끝난 뒤 발송하므로, 발송 실패가 분석을 실패시키면 안 된다 |
+| **캐시 장애도 무시한다** | 캐시 계층은 예외를 삼키고 미스처럼 동작한다. 그대로 원 서버 호출로 폴백한다 |
+| **도메인 간 의존은 단방향** | 다른 도메인의 데이터가 필요하면 포트와 어댑터로 격리한다. 의존받는 쪽은 상대를 모른다 |
+| **캐시 개별 무효화가 없다** | 입력이 문서마다 고유해 히트율이 낮아 그렇게 설계했다. 전체를 비우려면 캐시 키 버전을 올린다. 배경 → [`docs/llm-cache-strategy.md`](docs/llm-cache-strategy.md) |
 
 ---
 

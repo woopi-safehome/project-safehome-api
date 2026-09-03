@@ -1,79 +1,49 @@
-# resources — 환경설정 프로파일
+# resources — 설정과 초기화
 
-Spring Boot 설정 파일 모음. `application.yml`이 루트이며 나머지는 기능별로 분리된 프로파일 파일이다.
+프로파일별 설정 파일과 DB 초기화 SQL.
 
-> **범위**: `src/main/resources/**` (설정 파일 + DB 초기화 SQL)
+> **범위**: `src/main/resources/**`
 > **상위**: [API README](../../../README.md)
-> **검증**: 환경변수 목록은 각 `application-*.yml`의 `${VAR:기본값}` 표기와 대조
+> **여기 없는 것**: 파일 목록과 환경 변수 이름 — 각 설정 파일이 답한다.
+> 값은 모두 `${변수:기본값}` 형태로 주입되므로, 필요한 변수는 그 표기를 훑으면 나온다.
 
-> ⚠️ **알려진 불일치**: `application-swagger.yml`의 운영 블록만 `on-profile: prod`이고
-> 나머지 파일은 모두 `prd`를 쓴다. 현재 `prd`로 기동하면 Swagger 비활성 설정이 적용되지 않는다.
+---
 
-## 파일 목록
+## 구성 원칙
 
-| 파일 | 역할 |
-|------|------|
-| `application.yml` | 루트 설정. 모든 하위 프로파일을 `import`로 로드 |
-| `application-auth.yml` | JWT 시크릿·만료시간, 카카오 Admin Key |
-| `application-db.yml` | DataSource (local: H2, dev/prd: PostgreSQL Read/Write 분리) |
-| `application-redis.yml` | Redis host (local: localhost, dev/prd: 환경변수) |
-| `application-ai.yml` | AI API 연동 URL |
-| `application-sentry.yml` | Sentry DSN, traces-sample-rate, 환경 태그 |
-| `application-swagger.yml` | Swagger UI 경로, local/dev 활성, prd 비활성 |
-| `application-logging.yml` | 로그 레벨 (local/dev: DEBUG, prd: ERROR) |
-| `application-websocket.yml` | ⚠ **읽는 코드 없음** — `WebSocketConfig.kt`가 전체 주석 처리되어 사용되지 않는다. 실제 CORS는 `global/config/AsyncConfig.addCorsMappings()` |
+루트 설정 파일이 나머지를 기능별로 나눠 **import 한다.** 인증·DB·캐시·외부 연동·로깅 등이 각각 별도 파일이다.
+설정을 추가할 때는 루트에 몰아넣지 말고 용도별 파일을 만들고 import에 등록한다.
+**등록을 빠뜨리면 파일이 조용히 무시된다.**
 
-## 프로파일 구분
+**실제 값은 어디에도 커밋하지 않는다.** 모두 환경 변수로 주입하고, 기본값은 로컬에서만 쓸 수 있는 것으로 둔다.
 
-| 프로파일 | 실행 환경 | DB | 비고 |
-|---------|---------|-----|------|
-| `local` | 개발자 로컬 | H2 (파일) | H2 Console 활성, Embedded Redis |
-| `dev` | 개발 서버 | PostgreSQL (Primary + Replica) | Swagger 활성 |
-| `prd` | 운영 서버 | PostgreSQL (Primary + Replica) | Swagger 비활성, 로그 ERROR만 |
+---
 
-프로파일 활성화:
-```bash
-./gradlew bootRun --args='--spring.profiles.active=local'
-# 또는 환경변수
-SPRING_PROFILES_ACTIVE=dev
-```
+## 프로파일
 
-## 환경변수 목록
+| 프로파일 | 쓰임 | 특징 |
+|---|---|---|
+| 로컬 | 개발자 기계 | 파일 기반 DB와 임베디드 캐시를 써서 **환경 변수 없이 그대로 뜬다** |
+| 개발 | 개발 서버 | 외부 DB(주/복제본)와 캐시. API 문서 활성 |
+| 운영 | 운영 서버 | 개발과 같은 구성. API 문서 비활성, 로그 최소 |
 
-실제 값은 코드에 절대 하드코딩하지 않는다. 모두 `${VAR:기본값}` 형태로 주입.
+로컬은 무설정으로 기동되지만, **소셜 로그인을 쓰려면 그 키만은 필요하다.**
 
-| 변수 | 관련 파일 | 필수 | 설명 |
-|------|---------|:---:|------|
-| `JWT_SECRET` | application-auth.yml | dev/prd | JWT 서명 시크릿 (32바이트 이상) |
-| `KAKAO_ADMIN_KEY` | application-auth.yml | ✅ | 카카오 Admin Key (회원탈퇴 등) |
-| `DB_WRITE_HOST` | application-db.yml | dev/prd | PostgreSQL Primary 호스트 |
-| `DB_READ_HOST` | application-db.yml | dev/prd | PostgreSQL Replica 호스트 |
-| `DB_WRITE_PORT` | application-db.yml | dev/prd | Primary 포트 (기본 5432) |
-| `DB_READ_PORT` | application-db.yml | dev/prd | Replica 포트 (기본 5433) |
-| `DB_NAME` | application-db.yml | dev/prd | DB 이름 (기본 safehome) |
-| `DB_USERNAME` | application-db.yml | dev/prd | DB 유저 (기본 safehome) |
-| `DB_PASSWORD` | application-db.yml | ✅ | DB 패스워드 |
-| `SQL_INIT_MODE` | application-db.yml | - | schema/data 초기화 모드 (기본 always) |
-| `REDIS_HOST` | application-redis.yml | dev/prd | Redis 호스트 (기본 localhost) |
-| `AI_API_URL` | application-ai.yml | - | AI API 주소 (기본 http://localhost:5000) |
-| `SENTRY_DSN` | application-sentry.yml | - | Sentry DSN (미설정 시 Sentry 비활성) |
-| `SPRING_PROFILES_ACTIVE` | application-sentry.yml | - | Sentry environment 태그로 사용 |
+---
 
-## local 환경 최소 설정
+## 조용히 깨지는 것들
 
-`local` 프로파일은 H2 + Embedded Redis를 사용하므로 환경변수 없이 실행 가능.
-단, 카카오 로그인 기능 사용 시 `KAKAO_ADMIN_KEY` 필요.
+- **운영 프로파일 이름이 파일마다 다르게 적힌 곳이 있다.** 한 파일만 다른 철자를 쓰고 있어,
+  운영으로 띄우면 **그 파일의 설정이 적용되지 않는다.** 에러 없이 의도와 다른 상태로 뜬다.
+  설정을 손볼 때 프로파일 이름 철자가 다른 파일과 같은지 확인한다.
+- **읽는 코드가 없는 설정 파일이 있다.** 존재한다고 해서 반영되는 것이 아니다.
+  설정을 바꿨는데 동작이 그대로라면, 그 값을 실제로 읽는 코드가 있는지부터 확인한다.
+- **스키마 초기화 SQL이 두 벌이다** — 로컬용과 서버용. **한쪽만 고치면 로컬은 되고 서버에서 깨진다.**
+  자동 DDL을 쓰지 않으므로 엔티티를 바꿔도 테이블은 따라오지 않는다.
 
-```bash
-./gradlew bootRun
-# H2 Console: http://localhost:8080/h2-console
-# Swagger:    http://localhost:8080/swagger-ui.html
-```
+---
 
-## 서버 환경 설정 위치
+## 서버 환경
 
-dev/prd 서버에서는 GitHub Actions가 아닌 **서버 로컬 env 파일**로 관리:
-```
-/home/woopi/project/safehome/env/.env_api
-```
-Docker Compose에서 `--env-file` 옵션으로 로드.
+개발·운영 서버의 실제 값은 저장소가 아니라 **서버에 있는 환경 파일**에 있고, 컨테이너 기동 시 주입된다.
+경로와 파일명은 배포 워크플로가 원본이므로 여기 복제하지 않는다.

@@ -1,144 +1,64 @@
-# auth 도메인
+# auth — 인증 도메인
 
-카카오 소셜 로그인, JWT 토큰 발급/갱신, 회원 탈퇴, FCM 디바이스 등록을 처리하는 인증 도메인.
-Spring Security 없이 `@CurrentUser` 커스텀 애노테이션과 `HandlerMethodArgumentResolver`로 인증을 처리한다.
+소셜 로그인, 토큰 발급·갱신, 회원 탈퇴, 푸시 디바이스 등록을 담당한다.
 
 > **범위**: `domain/auth/**`
 > **상위**: [`domain/README.md`](../README.md) (레이어 규칙) · [API README](../../../../../../../../README.md)
-> **연관**: 엔드포인트 스펙 → 루트 README의 모듈 간 계약 · JWT 유틸 → [`global/README.md`](../../global/README.md)
-> **검증**: 클래스 목록은 이 디렉토리 트리와 1:1, 시그니처는 각 포트 인터페이스와 대조
+> **연관**: 엔드포인트 스펙 → 저장소 README의 **App→API 계약** 절 · 토큰 유틸 → [`global/README.md`](../../global/README.md)
+> **여기 없는 것**: 클래스·인터페이스·메서드 목록 — 디렉터리와 코드가 답한다.
 
 ---
 
-## 패키지 구조
+## 책임과 경계
 
-```
-auth/
-├── adapter/
-│   ├── inbound/web/
-│   │   ├── AuthInboundWebAdapter         # POST /api/auth/kakao, POST /api/auth/refresh
-│   │   ├── UserInboundWebAdapter         # DELETE /api/users/me, POST /api/users/devices
-│   │   └── dto/
-│   │       ├── AuthRequest               # 요청 DTO (KakaoLogin, Refresh)
-│   │       ├── AuthResponse              # 응답 DTO (Login, Token)
-│   │       └── DeviceRequest             # FCM 디바이스 토큰 요청 DTO (Register)
-│   └── outbound/
-│       ├── KakaoApiAdapter               # KakaoApiPort 구현체 (Kakao REST API 호출)
-│       └── persistence/
-│           ├── UserEntityMapper          # UserEntity ↔ User.Data 변환
-│           ├── UserPersistenceAdapter    # UserPersistencePort 구현체 (JPA)
-│           ├── UserDevicePersistenceAdapter  # UserDevicePersistencePort 구현체 (JPA upsert)
-│           └── jpa/
-│               ├── UserEntity            # JPA 엔티티 (BaseEntity 상속)
-│               ├── UserRepository        # Spring Data JPA Repository
-│               ├── UserDeviceEntity      # FCM 디바이스 JPA 엔티티 (userId, fcmToken, unique)
-│               └── UserDeviceRepository  # Spring Data JPA Repository (findAllFcmTokenByUserId)
-│
-├── application/
-│   ├── port/
-│   │   ├── inbound/
-│   │   │   └── AuthUseCase               # 카카오 로그인, 토큰 갱신, 회원 탈퇴, 디바이스 등록 인터페이스
-│   │   └── outbound/
-│   │       ├── UserPersistencePort       # 사용자 조회/저장/삭제 포트
-│   │       ├── KakaoApiPort              # 카카오 사용자 정보 조회, 연결 해제 포트
-│   │       └── UserDevicePersistencePort # FCM 토큰 upsert/삭제 포트
-│   └── usecase/
-│       └── AuthUseCaseImpl               # 비즈니스 흐름 구현
-│
-└── domain/
-    └── model/
-        └── User.kt                       # User.Create / User.Data, KakaoUserInfo, AuthResult, TokenPair
-```
+| 이 도메인이 답하는 것 | 답하지 않는 것 |
+|---|---|
+| 이 요청은 누구인가 | 그 사람이 무엇을 할 수 있는가 (권한은 아직 없다) |
+| 토큰이 유효한가 | 토큰을 어떻게 만드는가 (공통 인프라 소관) |
+| 이 사용자의 푸시 대상은 무엇인가 | 언제 무엇을 보낼 것인가 (보내는 쪽 소관) |
 
 ---
 
-## 요청 흐름
+## 인증이 성립하는 방식 — 가장 중요한 사실
 
-```
-POST /api/auth/kakao
-  AuthInboundWebAdapter
-    → AuthUseCase.kakaoLogin(kakaoAccessToken)
-      → AuthUseCaseImpl
-          1. KakaoApiPort.getUserInfo(token)      # Kakao API로 사용자 정보 조회
-          2. UserPersistencePort.findByKakaoId()  # 기존 회원 조회
-          3. 신규 회원이면 UserPersistencePort.save()
-          4. JwtProvider.generateAccessToken/RefreshToken(userId)
-          5. return AuthResult(tokens, isNewUser)
+**보안 프레임워크를 쓰지 않는다.** 필터도 인터셉터도 없다.
+컨트롤러가 **사용자 식별자를 인자로 선언하면**, 인자 리졸버가 인증 헤더를 해석해 그 값을 채운다.
 
-POST /api/auth/refresh
-  AuthInboundWebAdapter
-    → AuthUseCase.refresh(refreshToken)
-      → JwtProvider.validateRefreshToken()       # 유효성 검증 + userId 추출
-      → JwtProvider.generate*Token(userId)       # 새 토큰 쌍 발급
-      → return TokenPair
-
-DELETE /api/users/me   [Authorization: Bearer {accessToken}]
-  UserInboundWebAdapter (@CurrentUser → userId 추출)
-    → AuthUseCase.withdraw(userId)
-      → UserPersistencePort.findById()           # 사용자 조회 (kakaoId 확보)
-      → KakaoApiPort.unlinkUser(kakaoId)         # 카카오 연결 해제
-      → UserPersistencePort.deleteById()         # 소프트 딜리트
-
-POST /api/users/devices   [Authorization: Bearer {accessToken}]
-  UserInboundWebAdapter (@CurrentUser → userId 추출)
-    → AuthUseCase.registerDevice(userId, fcmToken)
-      → UserDevicePersistencePort.upsert(userId, fcmToken)
-          # fcmToken unique 제약: 동일 토큰 재등록 시 update, 신규 시 insert
-```
+> 이것이 **유일한 인증 지점**이다.
+> 보호가 필요한 엔드포인트가 그 인자를 선언하지 않으면 **아무 검사 없이 열린다.**
+> 컴파일도 되고 테스트도 통과한다. 문서 밖에서는 드러나지 않는다.
 
 ---
 
-## 클래스 역할
+## 관통 흐름
 
-### adapter/inbound
+**로그인** — 소셜 제공자에게 사용자 정보를 물어보고, 없으면 만들고, 토큰 쌍을 발급한다.
+응답에 **신규 여부**가 담겨 클라이언트가 온보딩 분기를 판단한다.
 
-| 클래스 | 역할 |
-|--------|------|
-| `AuthInboundWebAdapter` | `POST /api/auth/kakao` (카카오 로그인), `POST /api/auth/refresh` (토큰 갱신) |
-| `UserInboundWebAdapter` | `DELETE /api/users/me` (회원 탈퇴), `POST /api/users/devices` (FCM 토큰 등록). 모두 `@CurrentUser` 인증 필요 |
-| `AuthRequest` | 요청 DTO. `KakaoLogin(kakaoAccessToken)`, `Refresh(refreshToken)` |
-| `AuthResponse` | 응답 DTO. `Login(tokens + isNewUser)`, `Token(tokens)` |
-| `DeviceRequest` | FCM 디바이스 요청 DTO. `Register(fcmToken)` |
+**토큰 갱신** — 갱신 토큰을 검증해 사용자를 식별하고 **토큰 쌍을 새로 발급**한다.
+접근 토큰만 갱신하지 않는다.
 
-### adapter/outbound
+**회원 탈퇴** — **소셜 연결을 먼저 해제하고 그 다음 사용자를 지운다.**
+순서가 중요하다. 먼저 지우면 연결 해제에 필요한 식별자를 잃어 외부 연결이 남는다.
 
-| 클래스 | 역할 |
-|--------|------|
-| `KakaoApiAdapter` | `RestTemplate`으로 Kakao API 호출. `getUserInfo` (Bearer token), `unlinkUser` (KakaoAK admin key) |
-| `UserPersistenceAdapter` | `UserRepository`를 통해 사용자 조회/저장/소프트 딜리트 |
-| `UserDevicePersistenceAdapter` | `UserDeviceRepository`를 통해 FCM 토큰 upsert(저장 또는 갱신) / userId 기준 전체 삭제 |
-| `UserEntity` | `BaseEntity` 상속 JPA 엔티티 (kakaoId, nickname, profileImageUrl) |
-| `UserEntityMapper` | `UserEntity` ↔ `User.Data` 변환 |
-| `UserRepository` | Spring Data JPA Repository (`findByKakaoIdAndIsDeletedFalse`, `findByIdAndIsDeletedFalse`) |
-| `UserDeviceEntity` | `BaseEntity` 상속 JPA 엔티티 (userId, fcmToken unique). 테이블: `user_devices` |
-| `UserDeviceRepository` | Spring Data JPA Repository (`findByFcmToken`, `findAllByUserId`, `deleteAllByUserId`, `deleteByFcmToken`) |
+**디바이스 등록** — 같은 토큰을 다시 등록해도 실패하지 않는다(upsert).
+토큰에 유일 제약이 걸려 있어, 기기 주인이 바뀌면 소유자가 갱신된다.
 
-### application/port/inbound
+---
 
-| 인터페이스 | 역할 |
-|-----------|------|
-| `AuthUseCase` | `kakaoLogin(token): AuthResult`, `refresh(token): TokenPair`, `withdraw(userId)`, `registerDevice(userId, fcmToken)` |
+## 불변식
 
-### application/port/outbound
+- **삭제는 소프트 딜리트다.** 행이 남으므로 조회는 항상 삭제 여부를 걸러야 한다.
+  거르지 않으면 **탈퇴한 사용자가 되살아난 것처럼 보인다.**
+- **탈퇴 시 그 사용자의 푸시 디바이스도 함께 정리한다.** 남겨 두면 없는 사용자에게 발송을 시도한다.
+- **다른 도메인이 이 도메인의 데이터를 필요로 할 때, 이 도메인은 그 사실을 모른다.**
+  필요한 쪽이 포트를 정의하고 어댑터로 접근한다. 여기서 상대 도메인을 참조하지 않는다.
 
-| 인터페이스 | 역할 |
-|-----------|------|
-| `UserPersistencePort` | `findByKakaoId`, `findById`, `save`, `deleteById` |
-| `KakaoApiPort` | `getUserInfo(accessToken): KakaoUserInfo`, `unlinkUser(kakaoId)` |
-| `UserDevicePersistencePort` | `upsert(userId, fcmToken)` (토큰 저장/갱신), `deleteByUserId(userId)` (회원 탈퇴 시 전체 삭제). deed 도메인의 `UserDeviceQueryAdapter`가 `UserDeviceRepository`를 직접 참조 |
+---
 
-### application/usecase
+## 설계 결정
 
-| 클래스 | 역할 |
-|--------|------|
-| `AuthUseCaseImpl` | 카카오 로그인(신규/기존 분기), 토큰 갱신, 회원 탈퇴 비즈니스 흐름 조율 |
-
-### domain/model
-
-| 클래스 | 역할 |
-|--------|------|
-| `User.Create` | 사용자 생성 입력 모델 (kakaoId, nickname, profileImageUrl) |
-| `User.Data` | 사용자 조회 결과 모델 (id 포함) |
-| `KakaoUserInfo` | 카카오 API 응답 파싱 결과 |
-| `AuthResult` | 로그인 응답 (accessToken, refreshToken, expiresIn, isNewUser) |
-| `TokenPair` | 토큰 갱신 응답 (accessToken, refreshToken, expiresIn) |
+**보안 프레임워크를 도입하지 않았다.** 권한 체계가 없고 인증 방식이 단순해서,
+프레임워크의 설정 비용보다 직접 해석이 단순하다고 판단했다.
+**대가는 위 "인증이 성립하는 방식"의 위험을 사람이 지켜야 한다는 것**이다.
+권한(역할·스코프)이 생기는 시점이 이 결정을 다시 볼 때다.

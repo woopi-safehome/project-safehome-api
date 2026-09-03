@@ -1,117 +1,85 @@
-# Domain 패키지
+# domain — 도메인 패키지
 
-헥사고날 아키텍처(Ports & Adapters) + DDD 기반으로 설계된 도메인 패키지.
-각 도메인은 독립된 헥사곤으로, `adapter / application / domain` 3개 레이어로 구성된다.
+각 도메인은 독립된 헥사곤이다. 바깥(adapter)에서 안(domain)으로만 의존하며, 역방향은 없다.
 
-> **범위**: `src/main/kotlin/com/woopi/safehome/domain/**` — 레이어 책임, 보일러플레이트, 도메인 간 의존 규칙
-> **상위**: [API README](../../../../../../../README.md) · **하위**: 각 도메인 `README.md`
-> **검증**: 도메인 목록은 이 디렉토리의 하위 폴더와 1:1
-
----
-
-## 도메인 목록
-
-| 도메인 | 설명 |
-|--------|------|
-| `auth` | 카카오 소셜 로그인, JWT 발급/갱신, 회원 탈퇴, FCM 디바이스 등록 |
-| `deed` | 등기부등본 PDF 분석 (핵심 도메인) — Job 관리, 비동기 실행, SSE 알림 포함 |
-| `_sample` | CRUD 참조 구현체 (새 도메인 작성 시 템플릿) |
-
-> 비동기 분석 실행과 SSE 알림은 별도 도메인이 아니라 `deed` 안의
-> `application/service/AnalysisAsyncProcessor` + `adapter/outbound/SseNotifierAdapter`가 담당한다.
+> **범위**: `domain/**` — 레이어 책임, 표준 구조, 도메인 간 의존 규칙
+> **상위**: [API README](../../../../../../../README.md) · **하위**: 각 도메인의 `README.md`
+> **여기 없는 것**: 클래스·함수 목록. 도메인 목록은 이 디렉터리의 하위 폴더가 답한다.
 
 ---
 
-## 도메인 패키지 보일러플레이트
+## 표준 구조 — 이 문서가 기준이다
 
 ```
-{domain}/
-├── adapter/                          # [기술 레이어] 외부 시스템과의 연결
-│   ├── inbound/
-│   │   └── web/                      # HTTP 진입점
-│   │       ├── {Name}InboundWebAdapter
-│   │       └── dto/
-│   │           ├── {Name}Request
-│   │           ├── {Name}Response
-│   │           └── {Name}DtoMapper
-│   └── outbound/
-│       └── persistence/              # 영속성 (JPA)
-│           ├── {Name}PersistenceAdapter
-│           └── jpa/
-│               ├── {Name}Entity
-│               ├── {Name}EntityMapper
-│               └── {Name}Repository
+{도메인}/
+├── adapter/                     # 바깥 세계와의 변환. 비즈니스 로직 없음
+│   ├── inbound/web/             #   들어오는 요청 (HTTP)
+│   │   └── dto/                 #   요청·응답 형식
+│   └── outbound/                #   나가는 요청
+│       └── persistence/jpa/     #   영속성 (엔티티·리포지토리)
 │
-├── application/                      # [응용 레이어] 유스케이스 + 포트 정의
+├── application/                 # 유스케이스. 흐름을 조율할 뿐 규칙을 갖지 않음
 │   ├── port/
-│   │   ├── inbound/                  # 도메인이 외부에 제공하는 기능 명세
-│   │   │   └── {Name}UseCase
-│   │   └── outbound/                 # 도메인이 외부에 요구하는 기능 명세
-│   │       └── {Name}PersistencePort
-│   └── usecase/                      # 인바운드 포트 구현체 (비즈니스 흐름 조율)
-│       └── {Name}UseCaseImpl
+│   │   ├── inbound/             #   이 도메인이 제공하는 기능의 명세
+│   │   └── outbound/            #   이 도메인이 필요로 하는 기능의 명세
+│   ├── usecase/                 #   인바운드 포트 구현
+│   └── service/                 #   (선택) 긴 흐름·비동기 처리 분리
 │
-└── domain/                           # [도메인 레이어] 순수 비즈니스 로직
-    ├── model/                        # 도메인 모델 (JPA 엔티티와 분리된 순수 데이터 클래스)
-    │   └── {Name}.kt
-    └── service/                      # 도메인 서비스 (선택적, Spring 의존성 없음)
-        ├── {Name}DomainService
-        └── impl/
-            └── Default{Name}DomainService
+└── domain/                      # 순수 비즈니스. 프레임워크 의존 없음
+    ├── model/                   #   도메인 모델 (영속 엔티티와 별개)
+    └── exception/               #   (선택) 이 도메인 고유의 실패
 ```
+
+> **참조 구현과 이 문서가 다르면 이 문서를 따른다.** 오래된 참조 코드가 옛 배치를 유지하고 있을 수 있다.
+> 구조를 바꾸려면 여기부터 고치고 전체 도메인에 반영한다.
 
 ---
 
 ## 레이어 책임
 
-### adapter (기술 레이어)
-외부 세계와 도메인 사이의 변환만 담당한다. 비즈니스 로직을 포함하지 않는다.
+| 레이어 | 하는 일 | 알아도 되는 것 | 몰라야 하는 것 |
+|---|---|---|---|
+| `adapter/inbound` | 외부 호출을 받아 포트로 넘김 | 요청·응답 형식, 인바운드 포트 | 영속성, 엔티티 |
+| `adapter/outbound` | 포트가 요구한 일을 실제로 수행 | 엔티티, 외부 시스템, 아웃바운드 포트 | HTTP, 요청·응답 형식 |
+| `application` | 흐름 조율 | 도메인 모델, 포트 **인터페이스** | 구현체, 프레임워크 세부 |
+| `domain` | 비즈니스 규칙 그 자체 | 자기 자신뿐 | **전부** |
 
-- **inbound**: 외부 호출을 받아 application 포트로 전달 (HTTP, 메시지 등)
-- **outbound**: application이 정의한 outbound 포트의 구현체 (JPA, SSE, 외부 API 등)
-
-### application (응용 레이어)
-비즈니스 흐름을 조율한다. 도메인 로직을 직접 갖지 않고 도메인 서비스와 포트를 조합한다.
-
-- **port/inbound**: 도메인이 외부에 노출하는 유스케이스 인터페이스 (진입점 계약)
-- **port/outbound**: 도메인이 필요로 하는 인프라/외부 기능의 추상화
-- **usecase**: 인바운드 포트의 구현체. 여러 포트와 도메인 서비스를 조합해 흐름을 처리
-
-### domain (도메인 레이어)
-순수 비즈니스 규칙만 존재한다. Spring, JPA 등 기술 의존성 없음.
-
-- **model**: 도메인의 핵심 데이터 구조 (JPA 엔티티와 분리, `adapter/outbound/persistence/jpa`에 별도 엔티티 존재)
-- **service**: 단일 엔티티를 넘어서는 도메인 로직 (선택적으로 사용)
+- **`application`은 포트 인터페이스에만 의존한다.** 어댑터 구현체를 직접 참조하면 방향이 뒤집힌다.
+- **도메인 모델과 영속 엔티티는 다른 객체다.** 하나로 합치면 도메인이 영속성에 묶인다.
+- **두 어댑터는 서로를 모른다.** 인바운드가 엔티티를 만지거나 아웃바운드가 요청 형식을 만지면 구조가 깨진 것이다.
 
 ---
 
-## 요청 흐름
+## 요청이 지나가는 길
 
 ```
-[HTTP 요청]
-    ↓
-adapter/inbound/web/{Name}InboundWebAdapter
-    ↓  (인바운드 포트 호출)
-application/port/inbound/{Name}UseCase
-    ↓  (구현체)
-application/usecase/{Name}UseCaseImpl
-    ↓  (아웃바운드 포트 호출)           ↓  (도메인 서비스 호출)
-application/port/outbound/             domain/service/
-    ↓  (포트 구현체)
-adapter/outbound/persistence/{Name}PersistenceAdapter
+HTTP 요청
+   → 인바운드 웹 어댑터        (형식 변환)
+   → 인바운드 포트             (무엇을 할 수 있는가)
+   → 유스케이스                (흐름 조율)
+   → 아웃바운드 포트           (무엇이 필요한가)
+   → 아웃바운드 어댑터         (실제 수행)
 ```
+
+안쪽으로 갈수록 기술이 사라지고 규칙만 남는다. 이 순서를 건너뛰는 지름길을 만들지 않는다.
 
 ---
 
-## 도메인 간 의존 규칙
+## 도메인 간 의존
 
-- 의존 방향은 단방향으로 고정한다
-- 역방향 의존은 허용하지 않는다
-- 역방향이 필요한 경우 의존하는 쪽에 포트를 정의하고 상대 도메인이 어댑터로 구현한다
+**의존은 단방향으로 고정한다.** 서로 참조하면 어느 쪽도 따로 이해할 수 없게 된다.
 
-```
-deed  ──→  auth          # UserDeviceQueryAdapter가 auth의 UserDeviceRepository를 직접 참조 (FCM 토큰 조회)
-```
+다른 도메인의 데이터가 필요하면 **직접 가져오지 않는다.** 필요한 쪽에 아웃바운드 포트를 정의하고,
+그 포트를 구현하는 어댑터가 상대 도메인에 접근한다. 이렇게 하면 **의존받는 쪽은 상대를 모른 채로 남는다.**
 
-> `deed → auth` 의존은 포트(`UserDeviceQueryPort`) + 어댑터(`UserDeviceQueryAdapter`) 패턴으로 격리되어 있다.
-> auth 도메인은 deed를 알지 못한다.
+역방향 의존이 필요해 보인다면 대개 도메인 경계가 잘못 그어진 것이다. 경계를 다시 본다.
+
+---
+
+## 새 도메인을 만들 때
+
+위 표준 구조를 그대로 따르고, **안쪽에서 바깥으로** 만든다 — 도메인 모델 → 포트 → 유스케이스 → 어댑터 → 스키마.
+도메인 개념을 먼저 세우고 기술 세부를 나중에 붙인다.
+
+**`README.md`를 함께 만든다.** 그 도메인의 책임 경계·용어·상태 전이·불변식·설계 이유를 적는다.
+클래스 목록은 적지 않는다 — 코드가 답한다.
