@@ -25,7 +25,8 @@ AI 분석 자체는 하지 않는다 — AI API에 위임한다.
 ./gradlew test --tests "*ClassName"   # 단일 클래스
 ```
 
-로컬은 환경 변수 없이 그대로 뜬다. API 문서와 DB 콘솔 주소는 아래 **설정** 절 참조.
+로컬은 환경 변수 없이 그대로 뜬다. **API 문서와 DB 콘솔은 운영에서 꺼져 있다.**
+어느 프로파일에서 무엇이 켜지고 어디로 접속하는지는 각 설정 파일이 갖는다.
 스택과 라이브러리 버전은 `build.gradle.kts`가 답한다.
 
 ---
@@ -48,20 +49,14 @@ AI 분석 자체는 하지 않는다 — AI API에 위임한다.
 
 ## 구조
 
-```
-src/main/kotlin/com/woopi/safehome/
-├── SafehomeApplication.kt
-├── domain/                  # 도메인별 헥사곤 → domain/README.md
-│   ├── auth/                # 카카오 로그인, JWT, 회원탈퇴, FCM 디바이스 등록
-│   ├── deed/                # 등기부등본 분석 (핵심 도메인)
-│   └── _sample/             # CRUD 참조 구현 — 새 도메인의 템플릿
-└── global/                  # 횡단 관심사 → global/README.md
-    ├── aop/ auth/ config/ datasource/
-    └── enums/ exception/ jwt/ object/ response/
-```
+소스는 **도메인**과 **횡단 관심사** 둘로 나뉜다. 도메인 목록은 도메인 패키지의 하위 폴더가 답한다.
 
-각 도메인은 `adapter`(기술) / `application`(유스케이스·포트) / `domain`(순수 로직) 3계층이다.
-레이어 책임·의존 규칙·보일러플레이트 → **[`domain/README.md`](src/main/kotlin/com/woopi/safehome/domain/README.md)**
+- **도메인** — 각각이 독립된 헥사곤이다. 표준 구조와 레이어 책임은
+  **[`domain/README.md`](src/main/kotlin/com/woopi/safehome/domain/README.md)가 기준이다** — 기존 코드가 아니라 그 문서가.
+- **횡단 관심사** — 도메인과 무관하게 공유되는 공통 인프라 → [`global/README.md`](src/main/kotlin/com/woopi/safehome/global/README.md)
+
+**밑줄로 시작하는 도메인은 참조 구현이다.** 서비스 기능이 아니라 새 도메인을 만들 때 베껴 쓰라고 둔 것이라,
+지우기 전에 확인이 필요하다 — [`CLAUDE.md`](CLAUDE.md) 참조.
 
 ---
 
@@ -172,29 +167,12 @@ src/main/kotlin/com/woopi/safehome/
 
 ---
 
-## 계층별 상세
-
-저장소 전체에 걸친 패턴은 모듈 문서가 갖는다. 여기서 반복하지 않는다.
-
-| 알고 싶은 것 | 문서 |
-|---|---|
-| 응답 봉투·예외 변환·읽기/쓰기 분기·인증 바인딩 | [`global/README.md`](src/main/kotlin/com/woopi/safehome/global/README.md) |
-| 도메인 표준 구조·레이어 책임·도메인 간 의존 | [`domain/README.md`](src/main/kotlin/com/woopi/safehome/domain/README.md) |
-| 비동기 분석 흐름·실패 처리 | [`domain/deed/README.md`](src/main/kotlin/com/woopi/safehome/domain/deed/README.md) |
-| 인증 흐름·탈퇴 순서 | [`domain/auth/README.md`](src/main/kotlin/com/woopi/safehome/domain/auth/README.md) |
-| 캐시 키 구성·무효화 정책 | [`docs/llm-cache-strategy.md`](docs/llm-cache-strategy.md) |
-
----
-
 ## 데이터베이스
 
-| 테이블 | 용도 |
-|--------|------|
-| `analysis_jobs` | 분석 작업과 그 결과 |
-| `users` | 회원 |
-| `user_devices` | 푸시 토큰 |
+테이블 목록은 초기화 SQL이 답한다. 서비스 테이블 외에 **참조 구현용 테이블도 함께 들어 있다.**
 
-스키마 적용 방식과 초기화 SQL의 구성 → [`resources/README.md`](src/main/resources/README.md)
+**자동 DDL을 쓰지 않는다.** 엔티티를 바꿔도 테이블은 따라오지 않으므로 스키마 파일을 함께 고쳐야 하고,
+**그 파일은 두 벌이다.** 적용 방식과 초기화 SQL의 구성 → [`resources/README.md`](src/main/resources/README.md)
 
 ---
 
@@ -223,7 +201,7 @@ API만 교체되므로 스키마 변경은 배포와 별개로 챙겨야 한다.
 
 ## 결정 이유
 
-저장소 전체에 걸친 선택과 그 근거. 개별 규칙과 함정은 위 **계층별 상세**의 문서들이 갖는다.
+저장소 전체에 걸친 선택과 그 근거. 개별 규칙과 함정은 **문서 지도**가 가리키는 문서들이 갖는다.
 
 **관계형 DB를 골랐다.** 분석 결과를 JSON으로 다루는 구조라 JSON 인덱싱이 필요했고,
 로컬 개발용 DB와 문법 차이가 적어 이관 부담이 낮으며, 라이선스 종속성이 없다.
@@ -247,12 +225,14 @@ Kotest `BehaviorSpec` (Given/When/Then) + JUnit 5 Platform.
 
 ## 문서 지도
 
+저장소 전체에 걸친 패턴은 모듈 문서가 갖는다. 여기서 반복하지 않는다.
+
 | 알고 싶은 것 | 문서 |
-|-------------|------|
-| 도메인 공통 구조·레이어 책임·의존 규칙 | [`domain/README.md`](src/main/kotlin/com/woopi/safehome/domain/README.md) |
-| auth 도메인 상세 | [`domain/auth/README.md`](src/main/kotlin/com/woopi/safehome/domain/auth/README.md) |
-| deed 도메인 상세 | [`domain/deed/README.md`](src/main/kotlin/com/woopi/safehome/domain/deed/README.md) |
-| 공통 인프라 (설정·예외·JWT·DataSource) | [`global/README.md`](src/main/kotlin/com/woopi/safehome/global/README.md) |
-| 프로파일·환경변수 전체 | [`resources/README.md`](src/main/resources/README.md) |
-| LLM 캐시 키·TTL·무효화 정책 | [`docs/llm-cache-strategy.md`](docs/llm-cache-strategy.md) |
+|---|---|
+| 도메인 표준 구조·레이어 책임·도메인 간 의존 | [`domain/README.md`](src/main/kotlin/com/woopi/safehome/domain/README.md) |
+| 인증이 성립하는 방식·탈퇴 순서 | [`domain/auth/README.md`](src/main/kotlin/com/woopi/safehome/domain/auth/README.md) |
+| 비동기 분석 흐름·실패를 어디까지 실패로 보는가 | [`domain/deed/README.md`](src/main/kotlin/com/woopi/safehome/domain/deed/README.md) |
+| 횡단 관심사의 범위와 조용히 깨지는 지점들 | [`global/README.md`](src/main/kotlin/com/woopi/safehome/global/README.md) |
+| 설정을 나누는 원칙과 프로파일 구성 | [`resources/README.md`](src/main/resources/README.md) |
+| 분석 결과 캐시의 키 구성과 무효화 정책, 그 이유 | [`docs/llm-cache-strategy.md`](docs/llm-cache-strategy.md) |
 | AI 작업 지침 | [`CLAUDE.md`](CLAUDE.md) |
