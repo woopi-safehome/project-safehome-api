@@ -1,4 +1,10 @@
+# 기본은 꺼짐이다. 켜려는 프로파일이 명시적으로 켠다.
+# 프로파일 이름이 어긋나거나 새 프로파일이 생겨도 문서가 열리지 않도록 하기 위함.
 springdoc:
+  swagger-ui:
+    enabled: false
+  api-docs:
+    enabled: false
   cache:
     disabled: true  # false면 API 문서가 변경될 때마다 즉시 반영, 성능을 위해 true 처리
   default-consumes-media-type: application/json  # 기본 요청 미디어 타입
@@ -36,21 +42,4 @@ springdoc:
     doc-expansion: none           # 태그 펼침 여부
   api-docs:
     enabled: true
-    path: /api/v3/api-docs
-
----
-spring:
-  config:
-    activate:
-      on-profile: prod
-
-springdoc:
-  swagger-ui:
-    enabled: false
-    path: /api/swagger-ui.html    # 접속 경로
-    tags-sorter: alpha            # 태그 알파벳 정렬
-    operations-sorter: method     # GET, POST, 등 정렬
-    doc-expansion: none           # 태그 펼침 여부
-  api-docs:
-    enabled: false
     path: /api/v3/api-docs
