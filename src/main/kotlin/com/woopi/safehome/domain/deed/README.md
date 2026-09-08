@@ -4,7 +4,7 @@
 
 > **범위**: `domain/deed/**`
 > **상위**: [`domain/README.md`](../README.md) (레이어 규칙) · [API README](../../../../../../../../README.md)
-> **연관**: 캐시 정책 → [`docs/llm-cache-strategy.md`](../../../../../../../docs/llm-cache-strategy.md) · 엔드포인트 스펙 → 저장소 README의 **App→API 계약** 절
+> **연관**: 캐시 정책 → [`docs/llm-cache-strategy.md`](../../../../../../../../docs/llm-cache-strategy.md) · 엔드포인트 스펙 → 저장소 README의 **App→API 계약** 절
 > **여기 없는 것**: 클래스·포트·메서드 목록 — 디렉터리와 코드가 답한다.
 
 ---
