@@ -1,3 +1,0 @@
-websocket:
-  allowed-origins: "*"
-  heartbeat-interval: 10000
