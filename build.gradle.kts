@@ -37,6 +37,8 @@ val sentryVersion = "7.14.0"
 
 val jjwtVersion = "0.12.6"
 
+val archunitVersion = "1.3.0"
+
 dependencies {
 	implementation("org.springframework.boot:spring-boot-starter-data-jpa")
 	implementation("org.springframework.boot:spring-boot-starter-web")
@@ -88,6 +90,9 @@ dependencies {
 	testImplementation("io.kotest:kotest-runner-junit5")
 	testImplementation("io.kotest:kotest-assertions-core")
 	testImplementation("io.kotest.extensions:kotest-extensions-spring:$kotestSpringExtensionVersion")
+
+	// ArchUnit - 계층 규칙을 실행 가능한 형태로 고정
+	testImplementation("com.tngtech.archunit:archunit:$archunitVersion")
 
 	testImplementation("org.springframework.boot:spring-boot-starter-test")
 	testRuntimeOnly("org.junit.platform:junit-platform-launcher")
