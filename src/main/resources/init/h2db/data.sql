@@ -1,25 +1,2 @@
--- 샘플 마스터 데이터
-INSERT IGNORE INTO samples (name, code, description, order_no, is_deleted, created_id, created_at, updated_id, updated_at)
-VALUES
-('샘플 A', 'SMP-A', '샘플 A 설명입니다.', 1, FALSE, 1, CURRENT_TIMESTAMP, 1, CURRENT_TIMESTAMP),
-('샘플 B', 'SMP-B', '샘플 B 설명입니다.', 2, FALSE, 1, CURRENT_TIMESTAMP, 1, CURRENT_TIMESTAMP),
-('샘플 C', 'SMP-C', '샘플 C 설명입니다.', 3, FALSE, 1, CURRENT_TIMESTAMP, 1, CURRENT_TIMESTAMP);
-
-
--- 샘플 상세 데이터 (A)
-INSERT IGNORE INTO sample_details (sample_id, detail_value, is_deleted, created_id, created_at, updated_id, updated_at)
-VALUES
-(1, '샘플 A 상세값 1', FALSE, 1, CURRENT_TIMESTAMP, 1, CURRENT_TIMESTAMP),
-(1, '샘플 A 상세값 2', FALSE, 1, CURRENT_TIMESTAMP, 1, CURRENT_TIMESTAMP);
-
--- 샘플 상세 데이터 (B)
-INSERT IGNORE INTO sample_details (sample_id, detail_value, is_deleted, created_id, created_at, updated_id, updated_at)
-VALUES
-(2, '샘플 B 상세값 1', FALSE, 1, CURRENT_TIMESTAMP, 1, CURRENT_TIMESTAMP),
-(2, '샘플 B 상세값 2', FALSE, 1, CURRENT_TIMESTAMP, 1, CURRENT_TIMESTAMP);
-
--- 샘플 상세 데이터 (C)
-INSERT IGNORE INTO sample_details (sample_id, detail_value, is_deleted, created_id, created_at, updated_id, updated_at)
-VALUES
-(3, '샘플 C 상세값 1', FALSE, 1, CURRENT_TIMESTAMP, 1, CURRENT_TIMESTAMP),
-(3, '샘플 C 상세값 2', FALSE, 1, CURRENT_TIMESTAMP, 1, CURRENT_TIMESTAMP);
+-- 초기 데이터 없음.
+-- 참조 구현(_sample) 제거와 함께 샘플 시드 데이터를 걷어냈다.

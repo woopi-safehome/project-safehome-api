@@ -33,9 +33,6 @@ class EndpointAuthenticationConstraintTest(
         "/api/auth/refresh",
     )
 
-    // 참조 구현. 서비스 기능이 아니다.
-    val excludedPrefixes = listOf("/api/sample")
-
     Given("이 애플리케이션이 등록한 모든 엔드포인트") {
 
         val ourHandlers = handlerMapping.handlerMethods
@@ -45,10 +42,7 @@ class EndpointAuthenticationConstraintTest(
 
             val unprotected = ourHandlers
                 .filter { (info, handler) ->
-                    val patterns = info.patternValues
-                    val excluded = patterns.any { p -> excludedPrefixes.any { p.startsWith(it) } }
-                    val public = patterns.any { it in publicPatterns }
-                    if (excluded || public) return@filter false
+                    if (info.patternValues.any { it in publicPatterns }) return@filter false
 
                     // 조건을 여기에 복제하지 않는다. 실제 리졸버에게 묻는다.
                     // 리졸버가 받아들이지 않으면 그 인자는 인증에 쓰이지 않는다.

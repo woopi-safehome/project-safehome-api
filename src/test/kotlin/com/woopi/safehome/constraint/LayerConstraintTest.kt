@@ -73,8 +73,6 @@ class LayerConstraintTest : BehaviorSpec({
             Then("어댑터를 참조하지 않아야 한다") {
                 noClasses()
                     .that().resideInAPackage("com.woopi.safehome.domain.*.application..")
-                    // _sample 은 참조 구현이며 현재 이 규칙을 어기고 있다. 별도 판단이 필요해 제외한다.
-                    .and().resideOutsideOfPackage("com.woopi.safehome.domain._sample..")
                     .should().dependOnClassesThat()
                     .resideInAPackage("com.woopi.safehome.domain.*.adapter..")
                     .because(
