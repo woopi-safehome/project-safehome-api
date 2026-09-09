@@ -19,7 +19,6 @@ import io.sentry.Sentry
 import org.slf4j.LoggerFactory
 import org.springframework.scheduling.annotation.Async
 import org.springframework.stereotype.Service
-import java.security.MessageDigest
 
 @Service
 class AnalysisAsyncProcessor(
@@ -60,7 +59,7 @@ class AnalysisAsyncProcessor(
         // 2. LLM 분석 (캐시 우선)
         updateAndNotify(JobStatus.IN_PROGRESS, AnalysisStep.LLM_ANALYSIS, "AI가 등본을 분석중이에요")
 
-        val sectionHash = "${sections.toSha256Hash()}:${leaseType ?: "미지정"}"
+        val sectionHash = SectionCacheKey.of(sections, leaseType)
 
         val analysisResult = try {
             val cached = llmCachePort.get(sectionHash)
@@ -122,22 +121,4 @@ class AnalysisAsyncProcessor(
         }
     }
 
-    private fun DeedSections.toSha256Hash(): String {
-        val content = sections.entries
-            .sortedBy { it.key }
-            .joinToString("|") { (k, v) ->
-                "$k:${v.joinToString("\n") { it.normalizeForHash() }}"
-            }
-        return MessageDigest.getInstance("SHA-256")
-            .digest(content.toByteArray(Charsets.UTF_8))
-            .joinToString("") { "%02x".format(it) }
-    }
-
-    private fun String.normalizeForHash(): String =
-        replace("\r\n", "\n")
-            .replace("\r", "\n")
-            .lines()
-            .map { it.trim() }
-            .filter { it.isNotEmpty() }
-            .joinToString("\n")
 }
