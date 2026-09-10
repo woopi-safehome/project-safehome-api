@@ -38,6 +38,7 @@ val sentryVersion = "7.14.0"
 val jjwtVersion = "0.12.6"
 
 val archunitVersion = "1.3.0"
+val mockkVersion = "1.13.13"
 
 dependencies {
 	implementation("org.springframework.boot:spring-boot-starter-data-jpa")
@@ -93,6 +94,9 @@ dependencies {
 
 	// ArchUnit - 계층 규칙을 실행 가능한 형태로 고정
 	testImplementation("com.tngtech.archunit:archunit:$archunitVersion")
+
+	// MockK - 포트 자리에 대역을 끼워 유스케이스를 검증
+	testImplementation("io.mockk:mockk:$mockkVersion")
 
 	testImplementation("org.springframework.boot:spring-boot-starter-test")
 	testRuntimeOnly("org.junit.platform:junit-platform-launcher")
