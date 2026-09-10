@@ -6,6 +6,8 @@ import com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes
 import com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses
 import io.kotest.core.spec.style.BehaviorSpec
 import jakarta.persistence.Entity
+import org.springframework.web.client.RestClient
+import org.springframework.web.client.RestTemplate
 
 /**
  * 헥사고날 계층 규칙을 실행 가능한 형태로 고정한다.
@@ -78,6 +80,23 @@ class LayerConstraintTest : BehaviorSpec({
                     .because(
                         "application 이 어댑터 구현체를 직접 참조하면 의존 방향이 뒤집히고, " +
                             "포트 자리에 대역을 끼워 테스트하는 성질이 사라진다 — domain/README.md"
+                    )
+                    .check(classes)
+            }
+        }
+    }
+
+    Given("나가는 HTTP 클라이언트") {
+        When("만드는 곳을 검사하면") {
+            Then("공통 인프라의 생성 지점만 만들어야 한다") {
+                noClasses()
+                    .that().resideOutsideOfPackage("com.woopi.safehome.global.config..")
+                    .should().callMethod(RestClient::class.java, "builder")
+                    .orShould().callMethod(RestClient::class.java, "create")
+                    .orShould().callConstructor(RestTemplate::class.java)
+                    .because(
+                        "직접 만들면 타임아웃을 빠뜨려도 아무 표시가 나지 않는다. " +
+                            "응답하지 않는 상류에 요청이 매달리고 그 스레드는 돌아오지 않는다 — CLAUDE.md"
                     )
                     .check(classes)
             }

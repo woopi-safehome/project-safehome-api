@@ -12,14 +12,19 @@ import org.springframework.http.MediaType
 import org.springframework.stereotype.Component
 import org.springframework.util.LinkedMultiValueMap
 import org.springframework.web.client.HttpClientErrorException
-import org.springframework.web.client.RestTemplate
+import com.woopi.safehome.global.config.OutboundHttp
+import java.time.Duration
 
 @Component
 class KakaoApiAdapter(
     @Value("\${safehome.kakao.admin-key}") private val adminKey: String,
 ) : KakaoApiPort {
 
-    private val restTemplate = RestTemplate()
+    // 로그인 경로라 사용자가 기다린다. 상류가 멈추면 빨리 실패하는 편이 낫다.
+    private val restTemplate = OutboundHttp.restTemplate(
+        connectTimeout = Duration.ofSeconds(5),
+        readTimeout = Duration.ofSeconds(10),
+    )
 
     override fun getUserInfo(accessToken: String): KakaoUserInfo {
         val headers = HttpHeaders().apply {

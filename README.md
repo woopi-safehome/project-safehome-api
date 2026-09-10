@@ -219,7 +219,12 @@ API만 교체되므로 스키마 변경은 배포와 별개로 챙겨야 한다.
 ```bash
 ./gradlew test
 ```
-Kotest `BehaviorSpec` (Given/When/Then) + JUnit 5 Platform.
+Kotest `BehaviorSpec` (Given/When/Then) + JUnit 5 Platform. **CI 가 배포 전에 같은 것을 돌린다.**
+
+**제약 테스트**는 기능이 아니라 이 코드베이스가 유지해야 할 성질을 검사한다.
+계층 의존 방향, 엔티티 위치, 인증 인자, 나가는 HTTP 클라이언트의 생성 지점 —
+전부 어겨도 컴파일과 실행이 정상이라 조용히 지나가던 것들이다.
+어기면 실패 메시지가 이유와 근거 문서를 함께 알려준다.
 
 ---
 

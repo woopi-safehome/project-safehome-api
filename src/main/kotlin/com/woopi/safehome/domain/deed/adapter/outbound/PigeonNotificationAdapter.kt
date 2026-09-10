@@ -8,7 +8,8 @@ import org.springframework.beans.factory.annotation.Value
 import org.springframework.http.MediaType
 import org.springframework.stereotype.Component
 import org.springframework.web.client.HttpClientErrorException
-import org.springframework.web.client.RestClient
+import com.woopi.safehome.global.config.OutboundHttp
+import java.time.Duration
 
 @Component
 class PigeonNotificationAdapter(
@@ -17,7 +18,11 @@ class PigeonNotificationAdapter(
 ) : NotificationPort {
 
     private val log = LoggerFactory.getLogger(PigeonNotificationAdapter::class.java)
-    private val restClient = RestClient.create()
+    // 알림은 부가 기능이라 실패해도 넘어간다. 오래 붙잡을 이유가 없다.
+    private val restClient = OutboundHttp.restClient(
+        connectTimeout = Duration.ofSeconds(3),
+        readTimeout = Duration.ofSeconds(5),
+    )
     private val objectMapper = ObjectMapper()
 
     override fun sendPush(fcmTokens: List<String>, jobId: String) {

@@ -8,7 +8,8 @@ import org.springframework.beans.factory.annotation.Value
 import org.springframework.http.HttpStatusCode
 import org.springframework.http.MediaType
 import org.springframework.stereotype.Component
-import org.springframework.web.client.RestClient
+import com.woopi.safehome.global.config.OutboundHttp
+import java.time.Duration
 import org.springframework.web.client.RestClientResponseException
 
 @Component
@@ -18,7 +19,12 @@ class LlmAnalysisAdapter(
 ) : LlmAnalysisPort {
 
     private val log = LoggerFactory.getLogger(LlmAnalysisAdapter::class.java)
-    private val restClient = RestClient.builder().baseUrl(aiApiUrl).build()
+    // 모델 응답이 느려 읽기는 넉넉히 준다. 분석 서버의 요청 타임아웃과 같은 값이다.
+    private val restClient = OutboundHttp.restClient(
+        connectTimeout = Duration.ofSeconds(10),
+        readTimeout = Duration.ofSeconds(120),
+        baseUrl = aiApiUrl,
+    )
 
     override fun analyze(sections: DeedSections, leaseType: String?): String {
         val totalLines = sections.sections.values.sumOf { it.size }
