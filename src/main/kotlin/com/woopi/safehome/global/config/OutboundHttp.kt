@@ -2,6 +2,7 @@ package com.woopi.safehome.global.config
 
 import org.springframework.http.client.ClientHttpRequestFactory
 import org.springframework.http.client.SimpleClientHttpRequestFactory
+import org.springframework.stereotype.Component
 import org.springframework.web.client.RestClient
 import org.springframework.web.client.RestTemplate
 import java.time.Duration
@@ -15,8 +16,11 @@ import java.time.Duration
  * 테스트가 막는다.
  *
  * 값은 호출하는 쪽이 정한다. 무엇이 느려도 되는 호출인지는 그쪽만 안다.
+ *
+ * 주입받아 쓴다. 어댑터가 직접 만들면 테스트에서 바깥으로 나가는 길을 막을 수 없다.
  */
-object OutboundHttp {
+@Component
+class OutboundHttp {
 
     fun restClient(
         connectTimeout: Duration,

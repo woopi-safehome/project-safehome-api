@@ -18,10 +18,11 @@ import java.time.Duration
 @Component
 class KakaoApiAdapter(
     @Value("\${safehome.kakao.admin-key}") private val adminKey: String,
+    outboundHttp: OutboundHttp,
 ) : KakaoApiPort {
 
     // 로그인 경로라 사용자가 기다린다. 상류가 멈추면 빨리 실패하는 편이 낫다.
-    private val restTemplate = OutboundHttp.restTemplate(
+    private val restTemplate = outboundHttp.restTemplate(
         connectTimeout = Duration.ofSeconds(5),
         readTimeout = Duration.ofSeconds(10),
     )

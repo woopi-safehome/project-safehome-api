@@ -16,11 +16,12 @@ import org.springframework.web.client.RestClientResponseException
 class LlmAnalysisAdapter(
     private val objectMapper: ObjectMapper,
     @Value("\${safehome.ai-api.url}") aiApiUrl: String,
+    outboundHttp: OutboundHttp,
 ) : LlmAnalysisPort {
 
     private val log = LoggerFactory.getLogger(LlmAnalysisAdapter::class.java)
     // 모델 응답이 느려 읽기는 넉넉히 준다. 분석 서버의 요청 타임아웃과 같은 값이다.
-    private val restClient = OutboundHttp.restClient(
+    private val restClient = outboundHttp.restClient(
         connectTimeout = Duration.ofSeconds(10),
         readTimeout = Duration.ofSeconds(120),
         baseUrl = aiApiUrl,

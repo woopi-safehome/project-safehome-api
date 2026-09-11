@@ -15,11 +15,12 @@ import java.time.Duration
 class PigeonNotificationAdapter(
     @Value("\${safehome.notification.pigeon-url}") private val pigeonUrl: String,
     private val userDeviceQueryPort: UserDeviceQueryPort,
+    outboundHttp: OutboundHttp,
 ) : NotificationPort {
 
     private val log = LoggerFactory.getLogger(PigeonNotificationAdapter::class.java)
     // 알림은 부가 기능이라 실패해도 넘어간다. 오래 붙잡을 이유가 없다.
-    private val restClient = OutboundHttp.restClient(
+    private val restClient = outboundHttp.restClient(
         connectTimeout = Duration.ofSeconds(3),
         readTimeout = Duration.ofSeconds(5),
     )

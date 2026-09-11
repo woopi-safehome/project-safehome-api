@@ -10,12 +10,17 @@ import java.time.LocalDateTime
 import java.util.concurrent.ConcurrentHashMap
 
 @Component
-class SseNotifierAdapter : SseNotifierPort {
+class SseNotifierAdapter(
+    // 스트림 수명은 비동기 요청 타임아웃과 같은 값이어야 한다. 둘을 따로 조절하지 않는다.
+    private val timeoutMillis: Long = STREAM_TIMEOUT_MILLIS,
+    // 서블릿 밖에서는 완료 콜백이 뜨지 않아 실제 emitter 로는 검증할 수 없다.
+    private val emitterFactory: (Long) -> SseEmitter = ::SseEmitter,
+) : SseNotifierPort {
 
     private val emitters = ConcurrentHashMap<String, SseEmitter>()
 
     override fun createEmitter(jobId: String): SseEmitter {
-        val emitter = SseEmitter(300_000L)
+        val emitter = emitterFactory(timeoutMillis)
 
         emitter.onCompletion { emitters.remove(jobId) }
         emitter.onTimeout { emitters.remove(jobId) }
@@ -57,5 +62,9 @@ class SseNotifierAdapter : SseNotifierPort {
                 emitters.remove(jobId)
             }
         }
+    }
+
+    companion object {
+        const val STREAM_TIMEOUT_MILLIS = 300_000L
     }
 }
