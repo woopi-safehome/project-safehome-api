@@ -5,9 +5,24 @@ import com.tngtech.archunit.core.importer.ImportOption
 import com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes
 import com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses
 import io.kotest.core.spec.style.BehaviorSpec
+import com.tngtech.archunit.base.DescribedPredicate
+import com.tngtech.archunit.core.domain.JavaClass
+import com.tngtech.archunit.core.domain.JavaMethod
+import com.tngtech.archunit.lang.ArchCondition
+import com.tngtech.archunit.lang.ConditionEvents
+import com.tngtech.archunit.lang.SimpleConditionEvent
+import com.tngtech.archunit.lang.syntax.ArchRuleDefinition.methods
 import jakarta.persistence.Entity
+import org.springframework.http.ResponseEntity
+import org.springframework.transaction.annotation.Transactional
+import org.springframework.web.bind.annotation.DeleteMapping
+import org.springframework.web.bind.annotation.GetMapping
+import org.springframework.web.bind.annotation.PatchMapping
+import org.springframework.web.bind.annotation.PostMapping
+import org.springframework.web.bind.annotation.PutMapping
 import org.springframework.web.client.RestClient
 import org.springframework.web.client.RestTemplate
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter
 
 /**
  * 헥사고날 계층 규칙을 실행 가능한 형태로 고정한다.
@@ -97,6 +112,73 @@ class LayerConstraintTest : BehaviorSpec({
                     .because(
                         "직접 만들면 타임아웃을 빠뜨려도 아무 표시가 나지 않는다. " +
                             "응답하지 않는 상류에 요청이 매달리고 그 스레드는 돌아오지 않는다 — CLAUDE.md"
+                    )
+                    .check(classes)
+            }
+        }
+    }
+
+    Given("컨트롤러가 내보내는 응답") {
+        When("반환 타입을 검사하면") {
+            Then("공통 봉투이거나 스트리밍이어야 한다") {
+                methods()
+                    .that().areAnnotatedWith(GetMapping::class.java)
+                    .or().areAnnotatedWith(PostMapping::class.java)
+                    .or().areAnnotatedWith(PutMapping::class.java)
+                    .or().areAnnotatedWith(DeleteMapping::class.java)
+                    .or().areAnnotatedWith(PatchMapping::class.java)
+                    .should().haveRawReturnType(
+                        DescribedPredicate.describe("공통 응답 봉투 또는 스트리밍") { t: JavaClass ->
+                            t.isEquivalentTo(com.woopi.safehome.global.response.ApiResponse::class.java) ||
+                                t.isEquivalentTo(SseEmitter::class.java)
+                        }
+                    )
+                    .because(
+                        "클라이언트가 모든 응답을 같은 형태로 푼다. 봉투 없이 내보내면 " +
+                            "그 엔드포인트만 다른 방식으로 읽어야 한다 — CLAUDE.md"
+                    )
+                    .check(classes)
+            }
+        }
+    }
+
+    Given("컨트롤러의 오류 처리") {
+        When("에러 응답을 직접 만드는지 검사하면") {
+            Then("전역 핸들러에 맡겨야 한다") {
+                noClasses()
+                    .that().resideInAPackage("com.woopi.safehome.domain.*.adapter.inbound.web..")
+                    .should().dependOnClassesThat().areAssignableTo(ResponseEntity::class.java)
+                    .because(
+                        "컨트롤러에서 직접 만들면 상태 코드와 에러 코드가 전역 핸들러의 것과 어긋난다 — CLAUDE.md"
+                    )
+                    .check(classes)
+            }
+        }
+    }
+
+    Given("유스케이스의 트랜잭션 기본값") {
+        When("클래스 수준 선언을 검사하면") {
+            Then("읽기 전용이 기본이어야 한다") {
+                val 읽기전용기본 = object : ArchCondition<JavaClass>("읽기 전용을 기본으로 선언한다") {
+                    override fun check(item: JavaClass, events: ConditionEvents) {
+                        val tx = item.tryGetAnnotationOfType(Transactional::class.java)
+                        val ok = tx.isPresent && tx.get().readOnly
+                        if (!ok) events.add(
+                            SimpleConditionEvent.violated(
+                                item,
+                                "${item.simpleName} 에 @Transactional(readOnly = true) 가 없다"
+                            )
+                        )
+                    }
+                }
+                classes()
+                    .that().resideInAPackage("com.woopi.safehome.domain.*.application.usecase..")
+                    // 유스케이스 안의 익명 클래스(트랜잭션 동기화 등)는 대상이 아니다
+                    .and().areTopLevelClasses()
+                    .should(읽기전용기본)
+                    .because(
+                        "쓰기만 메서드에서 열어 준다. 기본이 쓰기면 빠뜨린 조회가 " +
+                            "조용히 쓰기 커넥션으로 간다 — global/README.md"
                     )
                     .check(classes)
             }
