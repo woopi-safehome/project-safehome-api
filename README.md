@@ -238,7 +238,8 @@ AI 분석 자체는 하지 않는다 — AI API에 위임한다.
 ```bash
 ./gradlew test
 ```
-Kotest `BehaviorSpec` (Given/When/Then) + JUnit 5 Platform. **CI 가 배포 전에 같은 것을 돌린다.**
+Given/When/Then 형식을 쓴다. 형식과 도구는 기존 테스트를 보고 맞춘다.
+**CI 가 배포 전에 같은 것을 돌린다.**
 
 **제약 테스트**는 기능이 아니라 이 코드베이스가 유지해야 할 성질을 검사한다.
 계층 의존 방향, 엔티티 위치, 인증 인자, 나가는 HTTP 클라이언트의 생성 지점 —
