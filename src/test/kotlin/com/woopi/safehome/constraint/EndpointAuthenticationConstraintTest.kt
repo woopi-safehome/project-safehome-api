@@ -4,6 +4,7 @@ import com.woopi.safehome.global.auth.CurrentUserArgumentResolver
 import io.kotest.assertions.withClue
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.shouldNotBe
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.boot.test.context.SpringBootTest
@@ -55,6 +56,12 @@ class EndpointAuthenticationConstraintTest(
                     "${info.patternValues.joinToString()} → ${handler.beanType.simpleName}.${handler.method.name}"
                 }
                 .sorted()
+
+            Then("검사할 엔드포인트를 찾아야 한다") {
+                withClue("엔드포인트를 하나도 찾지 못하면 아무것도 보지 않고 통과한다 — domain/auth/README.md") {
+                    ourHandlers.size shouldNotBe 0
+                }
+            }
 
             Then("인증 인자를 받지 않는 엔드포인트가 하나도 없어야 한다") {
                 withClue(

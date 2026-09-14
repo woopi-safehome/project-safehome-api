@@ -28,7 +28,8 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter
  * 헥사고날 계층 규칙을 실행 가능한 형태로 고정한다.
  *
  * 여기 있는 규칙은 전부 CLAUDE.md 와 domain/README.md 가 산문으로 적어 두던 것이다.
- * 산문은 읽어야 작동하고 조용히 낡는다. 여기로 옮긴 규칙은 어기면 빌드가 깨진다.
+ * 산문은 읽어야 작동하고 조용히 낡는다. 여기로 옮긴 규칙은 어기면 테스트가 깨진다.
+ * 규칙이 대상으로 삼는 클래스를 하나도 찾지 못하면 ArchUnit 이 기본값으로 실패시킨다.
  */
 class LayerConstraintTest : BehaviorSpec({
 
