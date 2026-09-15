@@ -26,8 +26,8 @@ spring:
 
   sql:
     init:
+      # 초기 데이터 스크립트는 두지 않는다. 주석만 남은 스크립트도 기동 중에 초기화를 실패시킨다.
       schema-locations: classpath*:init/postgresql/schema.sql
-      data-locations: classpath*:init/postgresql/data.sql
       mode: ${SQL_INIT_MODE:always}
 
   jpa:
@@ -75,8 +75,8 @@ spring:
 
   sql:
     init:
+      # 초기 데이터 스크립트는 두지 않는다. 주석만 남은 스크립트도 기동 중에 초기화를 실패시킨다.
       schema-locations: classpath*:init/h2db/schema.sql
-      data-locations: classpath*:init/h2db/data.sql
       mode: ${SQL_INIT_MODE:always}
 
   jpa:

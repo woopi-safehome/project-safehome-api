@@ -29,8 +29,9 @@ jobs:
           java-version: '21'
           cache: gradle
 
+      # 로컬과 같은 파일을 실행한다. 명령이 다르면 로컬 통과가 CI 통과를 뜻하지 않는다.
       - name: Run tests
-        run: ./gradlew test --console=plain
+        run: bash scripts/verify.sh
 
       - name: Upload test report on failure
         if: failure()
@@ -73,6 +74,23 @@ jobs:
           tags: |
             type=raw,value=dev
             type=sha,prefix=dev-,format=short
+
+      # 올리기 전에 이미지를 DB·캐시와 함께 실제로 띄워, 배포 구성의 헬스 체크를 컨테이너 안에서 돌린다.
+      # 테스트는 이미지를 보지 않는다 — 이미지가 뜨지 못하거나 헬스 체크 도구가 없으면 여기서 걸린다.
+      - name: Build image for smoke test
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          load: true
+          tags: ghcr.io/smoke/safehome-api:smoke
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            SENTRY_AUTH_TOKEN=${{ secrets.SENTRY_AUTH_TOKEN }}
+
+      - name: Smoke test
+        run: python3 scripts/smoke_image.py ghcr.io/smoke/safehome-api:smoke
 
       - name: Build and push
         uses: docker/build-push-action@v5

@@ -11,7 +11,6 @@ import com.woopi.safehome.domain.deed.application.port.outbound.PdfValidationPor
 import com.woopi.safehome.domain.deed.application.port.outbound.SseNotifierPort
 import com.woopi.safehome.domain.deed.application.port.outbound.UserDeviceQueryPort
 import com.woopi.safehome.domain.deed.domain.exception.InvalidPdfException
-import com.woopi.safehome.domain.deed.domain.model.DeedSections
 import com.woopi.safehome.global.enums.AnalysisStep
 import com.woopi.safehome.global.enums.JobStatus
 import com.woopi.safehome.global.enums.SafetyLevel
@@ -35,61 +34,58 @@ class AnalysisAsyncProcessor(
 
     private val log = LoggerFactory.getLogger(AnalysisAsyncProcessor::class.java)
 
+    // 요청 스레드 밖에서 돈다. 예외가 새어 나가면 아무도 받지 않고, 작업은 진행 중으로 멈춘 채
+    // 구독자는 끝을 받지 못한다. 그래서 결과를 만드는 단계의 예외는 전부 실패로 기록한다.
     @Async("analysisTaskExecutor")
     override fun execute(jobId: String, fileBytes: ByteArray, contentType: String?, leaseType: String?, userId: Long?) {
+        var step = AnalysisStep.PDF_PARSING
 
-        fun updateAndNotify(status: JobStatus, step: AnalysisStep, message: String) {
-            jobPersistencePort.updateStatus(jobId, status, step, message)
-            sseNotifierPort.notifyStep(jobId, status, step, message)
+        fun updateAndNotify(status: JobStatus, next: AnalysisStep, message: String) {
+            step = next
+            jobPersistencePort.updateStatus(jobId, status, next, message)
+            sseNotifierPort.notifyStep(jobId, status, next, message)
         }
 
-        // 1. PDF 파싱
-        updateAndNotify(JobStatus.IN_PROGRESS, AnalysisStep.PDF_PARSING, "첨부된 파일을 분석중이에요")
-
-        val sections = try {
-            pdfValidationPort.validate(fileBytes, contentType)
-            pdfParserPort.parse(fileBytes)
-        } catch (e: InvalidPdfException) {
-            updateAndNotify(JobStatus.FAILED, AnalysisStep.PDF_PARSING, e.message ?: "PDF 검증 실패")
-            return
-        }
-
-        log.info("[PDF_PARSING] jobId={}, sections={}", jobId, sections)
-
-        // 2. LLM 분석 (캐시 우선)
-        updateAndNotify(JobStatus.IN_PROGRESS, AnalysisStep.LLM_ANALYSIS, "AI가 등본을 분석중이에요")
-
-        val sectionHash = SectionCacheKey.of(sections, leaseType)
-
+        // 1·2. 문서 해석과 분석 (캐시 우선)
         val analysisResult = try {
+            updateAndNotify(JobStatus.IN_PROGRESS, AnalysisStep.PDF_PARSING, "첨부된 파일을 분석중이에요")
+
+            val sections = try {
+                pdfValidationPort.validate(fileBytes, contentType)
+                pdfParserPort.parse(fileBytes)
+            } catch (e: InvalidPdfException) {
+                updateAndNotify(JobStatus.FAILED, AnalysisStep.PDF_PARSING, e.message ?: "PDF 검증 실패")
+                return
+            }
+            log.info("[PDF_PARSING] jobId={}, sections={}", jobId, sections)
+
+            updateAndNotify(JobStatus.IN_PROGRESS, AnalysisStep.LLM_ANALYSIS, "AI가 등본을 분석중이에요")
+            val sectionHash = SectionCacheKey.of(sections, leaseType)
             val cached = llmCachePort.get(sectionHash)
             if (cached != null) {
                 log.info("[LLM_ANALYSIS] 캐시 히트. jobId={}, hash={}", jobId, sectionHash)
                 cached
             } else {
-                val result = llmAnalysisPort.analyze(sections, leaseType)
-                llmCachePort.put(sectionHash, result)
-                result
+                llmAnalysisPort.analyze(sections, leaseType).also { llmCachePort.put(sectionHash, it) }
             }
         } catch (e: Exception) {
-            log.error("[LLM_ANALYSIS] 분석 실패. jobId={}", jobId, e)
-            Sentry.withScope { scope ->
-                scope.setTag("jobId", jobId)
-                scope.setTag("step", AnalysisStep.LLM_ANALYSIS.name)
-                Sentry.captureException(e)
-            }
-            updateAndNotify(JobStatus.FAILED, AnalysisStep.LLM_ANALYSIS, "AI 분석 중 오류가 발생했습니다")
+            fail(jobId, step, e)
             return
         }
 
-        // 3. 후처리
-        updateAndNotify(JobStatus.IN_PROGRESS, AnalysisStep.POST_PROCESSING, "분석한 내용을 정리중이에요")
-
+        // 3. 결과 저장 — 결과를 만드는 일이므로 실패로 다룬다
         try {
+            updateAndNotify(JobStatus.IN_PROGRESS, AnalysisStep.POST_PROCESSING, "분석한 내용을 정리중이에요")
             val (safetyLevel, address) = extractSummaryFields(analysisResult)
             jobPersistencePort.complete(jobId, analysisResult, safetyLevel, address)
-            sseNotifierPort.notifyStep(jobId, JobStatus.COMPLETED, AnalysisStep.POST_PROCESSING, "완료 됐습니다!")
+        } catch (e: Exception) {
+            fail(jobId, AnalysisStep.POST_PROCESSING, e)
+            return
+        }
 
+        // 4. 완료 알림 — 결과는 이미 저장됐다. 알리는 일이 실패해도 결과를 되돌리지 않는다
+        try {
+            sseNotifierPort.notifyStep(jobId, JobStatus.COMPLETED, AnalysisStep.POST_PROCESSING, "완료 됐습니다!")
             if (userId != null) {
                 val tokens = userDeviceQueryPort.findTokensByUserId(userId)
                 if (tokens.isNotEmpty()) {
@@ -97,13 +93,27 @@ class AnalysisAsyncProcessor(
                 }
             }
         } catch (e: Exception) {
-            log.error("[POST_PROCESSING] 완료 처리 실패. jobId={}", jobId, e)
-            Sentry.withScope { scope ->
-                scope.setTag("jobId", jobId)
-                scope.setTag("step", AnalysisStep.POST_PROCESSING.name)
-                Sentry.captureException(e)
-            }
-            updateAndNotify(JobStatus.FAILED, AnalysisStep.POST_PROCESSING, "결과 저장 중 오류가 발생했습니다")
+            log.warn("[NOTIFY] 완료 알림 실패 — 결과는 저장됐다. jobId={}", jobId, e)
+        }
+    }
+
+    private fun fail(jobId: String, step: AnalysisStep, e: Exception) {
+        val message = when (step) {
+            AnalysisStep.PDF_PARSING -> "문서를 읽지 못했습니다"
+            AnalysisStep.LLM_ANALYSIS -> "AI 분석 중 오류가 발생했습니다"
+            AnalysisStep.POST_PROCESSING -> "결과 저장 중 오류가 발생했습니다"
+        }
+        log.error("[{}] 분석 실패. jobId={}", step, jobId, e)
+        Sentry.withScope { scope ->
+            scope.setTag("jobId", jobId)
+            scope.setTag("step", step.name)
+            Sentry.captureException(e)
+        }
+        try {
+            jobPersistencePort.updateStatus(jobId, JobStatus.FAILED, step, message)
+            sseNotifierPort.notifyStep(jobId, JobStatus.FAILED, step, message)
+        } catch (recordFailure: Exception) {
+            log.error("[{}] 실패 기록조차 실패했다. jobId={}", step, jobId, recordFailure)
         }
     }
 

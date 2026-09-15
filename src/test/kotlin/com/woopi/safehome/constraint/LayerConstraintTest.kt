@@ -78,8 +78,8 @@ class LayerConstraintTest : BehaviorSpec({
                     .should().dependOnClassesThat()
                     .haveFullyQualifiedName("com.woopi.safehome.global.datasource.DataSourceContextHolder")
                     .because(
-                        "읽기/쓰기 선택은 트랜잭션 애노테이션 하나로만 결정돼야 한다. " +
-                            "직접 조작하면 애노테이션과 실제 커넥션이 어긋나는데 동작은 정상으로 보인다 — global/README.md"
+                        "읽기/쓰기 분리는 지금 동작하지 않는다. 직접 조작은 복제 지연을 다루는 설계 없이 " +
+                            "분리를 우회해 켜는 길이다 — global/README.md"
                     )
                     .check(classes)
             }

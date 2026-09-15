@@ -39,7 +39,8 @@ out/
 ### Kotlin ###
 .kotlin
 
-/h2db
+# 로컬 파일 DB. 실행 위치에 따라 저장소 아래 어느 깊이에든 생긴다.
+h2db/
 
 ### Claude ###
 
