@@ -1,6 +1,7 @@
 package com.woopi.safehome.constraint
 
 import com.woopi.safehome.global.auth.CurrentUserArgumentResolver
+import io.kotest.assertions.withClue
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.shouldBe
 import org.springframework.beans.factory.annotation.Autowired
@@ -56,7 +57,12 @@ class EndpointAuthenticationConstraintTest(
                 .sorted()
 
             Then("인증 인자를 받지 않는 엔드포인트가 하나도 없어야 한다") {
-                unprotected shouldBe emptyList()
+                withClue(
+                    "보안 필터가 없어 인증 인자가 유일한 인증 지점이다. 선언하지 않으면 아무 검사 없이 열린다. " +
+                        "공개할 엔드포인트라면 이 테스트의 공개 목록에 올린다 — domain/auth/README.md"
+                ) {
+                    unprotected shouldBe emptyList()
+                }
             }
         }
     }
