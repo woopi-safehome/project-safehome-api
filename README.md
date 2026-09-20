@@ -104,6 +104,7 @@ python scripts/ci_status.py                                   # 푸시 뒤 원�
 | `UNAUTHORIZED` | 401 |
 | `FORBIDDEN` | 403 |
 | `NOT_FOUND` | 404 |
+| `DAILY_LIMIT_EXCEEDED` | 429 |
 | `KAKAO_API_ERROR` | 502 |
 | `INTERNAL_SERVER_ERROR` | 500 |
 
@@ -147,6 +148,7 @@ python scripts/ci_status.py                                   # 푸시 뒤 원�
 | | |
 |---|---|
 | `POST /api/deed/upload` 🔓 | PDF 업로드 → 분석 Job 생성. 비회원이면 주인 없는 작업이 된다 |
+| 제한 | **회원은 하루에 정해진 횟수만 시작할 수 있다.** 넘기면 `DAILY_LIMIT_EXCEEDED`. 횟수는 설정이 갖는다 |
 | 요청 | `multipart/form-data` — `file` (PDF, 필수) · `leaseType` (`전세` \| `월세`, 선택) |
 | 응답 `data` | `{ "jobId": string }` |
 

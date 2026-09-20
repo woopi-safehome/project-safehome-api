@@ -34,6 +34,14 @@ class JobPersistenceAdapter(
             .map { AnalysisJobEntityMapper.toModel(it) }
     }
 
+    override fun countStartedSince(userId: Long, since: java.time.LocalDateTime): Long {
+        return analysisJobRepository.countByUserIdAndCreatedAtGreaterThanEqualAndStatusNot(
+            userId = userId,
+            createdAt = since,
+            status = JobStatus.FAILED,
+        )
+    }
+
     override fun updateStatus(
         jobId: String,
         status: JobStatus,

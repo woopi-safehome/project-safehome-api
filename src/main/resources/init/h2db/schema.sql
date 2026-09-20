@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS analysis_jobs (
 
 CREATE INDEX IF NOT EXISTS idx_analysis_jobs_status ON analysis_jobs(status);
 CREATE INDEX IF NOT EXISTS idx_analysis_jobs_step ON analysis_jobs(step);
+CREATE INDEX IF NOT EXISTS idx_analysis_jobs_user_created ON analysis_jobs(user_id, created_at);
 
 -- 사용자 테이블
 CREATE TABLE IF NOT EXISTS users (

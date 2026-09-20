@@ -13,5 +13,6 @@ enum class ErrorCode(
     INTERNAL_SERVER_ERROR("INTERNAL_SERVER_ERROR", HttpStatus.INTERNAL_SERVER_ERROR, "서버 내부 오류가 발생했습니다."),
     UNAUTHORIZED("UNAUTHORIZED", HttpStatus.UNAUTHORIZED, "인증이 필요합니다."),
     FORBIDDEN("FORBIDDEN", HttpStatus.FORBIDDEN, "접근 권한이 없습니다."),
-    KAKAO_API_ERROR("KAKAO_API_ERROR", HttpStatus.BAD_GATEWAY, "카카오 API 오류가 발생했습니다.")
+    KAKAO_API_ERROR("KAKAO_API_ERROR", HttpStatus.BAD_GATEWAY, "카카오 API 오류가 발생했습니다."),
+    DAILY_LIMIT_EXCEEDED("DAILY_LIMIT_EXCEEDED", HttpStatus.TOO_MANY_REQUESTS, "오늘 분석 가능한 횟수를 모두 사용했습니다.")
 }

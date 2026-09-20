@@ -11,6 +11,7 @@ spring:
       - classpath:application-notification.yml
       - classpath:application-sentry.yml
       - classpath:application-auth.yml
+      - classpath:application-analysis.yml
 
 management:
   endpoints:

@@ -9,6 +9,7 @@ import com.woopi.safehome.domain.deed.domain.model.AnalysisJob
 import com.woopi.safehome.global.enums.JobStatus
 import com.woopi.safehome.global.exception.BusinessException
 import com.woopi.safehome.global.exception.ErrorCode
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.data.domain.Page
 import org.springframework.data.domain.Pageable
 import org.springframework.stereotype.Service
@@ -16,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional
 import org.springframework.transaction.support.TransactionSynchronization
 import org.springframework.transaction.support.TransactionSynchronizationManager
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter
+import java.time.LocalDate
 import java.util.*
 
 @Transactional(readOnly = true)
@@ -24,10 +26,29 @@ class DeedUseCaseImpl(
     private val jobPersistencePort: JobPersistencePort,
     private val sseNotifierPort: SseNotifierPort,
     private val analysisExecutorPort: AnalysisExecutorPort,
+    @Value("\${safehome.analysis.daily-limit}") private val dailyLimit: Int,
 ) : DeedUseCase {
+
+    /**
+     * 하루 제한을 확인한다. **계정 기준이다.**
+     *
+     * 하루의 경계는 서버의 자정이다 — 이 서비스의 시각 표기가 오프셋 없는 로컬 시각이라
+     * 다른 기준을 쓰면 클라이언트가 보는 날짜와 어긋난다.
+     *
+     * **비회원은 세지 않는다.** 셀 기준이 없기 때문이다 — 같은 사람인지 알 방법이 없으므로
+     * 여기서 막으면 모두를 한 덩어리로 막거나 아무도 못 막거나 둘 중 하나가 된다.
+     */
+    private fun assertWithinDailyLimit(userId: Long?) {
+        if (userId == null) return
+
+        val startedToday = jobPersistencePort.countStartedSince(userId, LocalDate.now().atStartOfDay())
+        if (startedToday >= dailyLimit) throw BusinessException(ErrorCode.DAILY_LIMIT_EXCEEDED)
+    }
 
     @Transactional
     override fun uploadDeed(command: DeedCommand.Upload): String {
+        assertWithinDailyLimit(command.userId)
+
         val jobId = UUID.randomUUID().toString()
 
         jobPersistencePort.create(
