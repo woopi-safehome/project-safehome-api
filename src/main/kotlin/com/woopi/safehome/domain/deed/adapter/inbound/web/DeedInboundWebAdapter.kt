@@ -10,6 +10,7 @@ import com.woopi.safehome.global.response.PagedResponse
 import com.woopi.safehome.global.response.PaginationInfo
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.tags.Tag
+import jakarta.servlet.http.HttpServletRequest
 import org.springframework.data.domain.PageRequest
 import org.springframework.data.domain.Sort
 import org.springframework.http.MediaType
@@ -37,6 +38,7 @@ class DeedInboundWebAdapter(
     fun uploadDeed(
         @CurrentUser userId: Long?,
         @ModelAttribute request: DeedRequest.Upload,
+        httpRequest: HttpServletRequest,
     ): ApiResponse<DeedResponse.UploadResult> {
         val command = DeedCommand.Upload(
             file = request.file,
@@ -44,6 +46,7 @@ class DeedInboundWebAdapter(
             fileSize = request.file.size,
             userId = userId,
             leaseType = request.leaseType,
+            clientAddress = httpRequest.remoteAddr,
         )
         val jobId = deedUseCase.uploadDeed(command)
         return ApiResponse.success(DeedResponse.UploadResult(jobId))

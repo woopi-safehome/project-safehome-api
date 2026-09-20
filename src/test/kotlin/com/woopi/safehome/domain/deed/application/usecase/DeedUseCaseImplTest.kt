@@ -2,6 +2,7 @@ package com.woopi.safehome.domain.deed.application.usecase
 
 import com.woopi.safehome.domain.deed.application.port.inbound.AnalysisExecutorPort
 import com.woopi.safehome.domain.deed.application.port.inbound.command.DeedCommand
+import com.woopi.safehome.domain.deed.application.port.outbound.AnonymousUsagePort
 import com.woopi.safehome.domain.deed.application.port.outbound.JobPersistencePort
 import com.woopi.safehome.domain.deed.application.port.outbound.SseNotifierPort
 import com.woopi.safehome.domain.deed.domain.model.AnalysisJob
@@ -44,13 +45,22 @@ class DeedUseCaseImplTest : BehaviorSpec({
         step = if (status == JobStatus.COMPLETED) AnalysisStep.POST_PROCESSING else null,
     )
 
+    fun anonymousUpload(clientAddress: String) = DeedCommand.Upload(
+        file = MockMultipartFile("file", "deed.pdf", "application/pdf", byteArrayOf(1, 2)),
+        fileName = "deed.pdf",
+        fileSize = 2L,
+        userId = null,
+        clientAddress = clientAddress,
+    )
+
     Given("업로드") {
 
         When("작업을 맡기면") {
             val jobs = mockk<JobPersistencePort>()
             val sse = mockk<SseNotifierPort>()
             val executor = mockk<AnalysisExecutorPort>()
-            val useCase = DeedUseCaseImpl(jobs, sse, executor, dailyLimit = 1)
+            val anon = mockk<AnonymousUsagePort>(relaxed = true)
+            val useCase = DeedUseCaseImpl(jobs, sse, executor, anon, dailyLimit = 1, anonymousDailyLimitPerClient = 1, anonymousDailyLimitTotal = 100)
 
             every { jobs.countStartedSince(1L, any()) } returns 0L
             every { jobs.create(any()) } returns job()
@@ -98,7 +108,8 @@ class DeedUseCaseImplTest : BehaviorSpec({
         When("비회원이 작업을 맡기면") {
             val jobs = mockk<JobPersistencePort>()
             val executor = mockk<AnalysisExecutorPort>()
-            val useCase = DeedUseCaseImpl(jobs, mockk(), executor, dailyLimit = 1)
+            val anon = mockk<AnonymousUsagePort>(relaxed = true)
+            val useCase = DeedUseCaseImpl(jobs, mockk(), executor, anon, dailyLimit = 1, anonymousDailyLimitPerClient = 1, anonymousDailyLimitTotal = 100)
 
             every { jobs.create(any()) } returns job(userId = null)
             every { executor.execute(any(), any(), any(), any(), any()) } just Runs
@@ -138,7 +149,8 @@ class DeedUseCaseImplTest : BehaviorSpec({
         When("오늘 제한만큼 이미 분석했으면") {
             val jobs = mockk<JobPersistencePort>()
             val executor = mockk<AnalysisExecutorPort>()
-            val useCase = DeedUseCaseImpl(jobs, mockk(), executor, dailyLimit = 1)
+            val anon = mockk<AnonymousUsagePort>(relaxed = true)
+            val useCase = DeedUseCaseImpl(jobs, mockk(), executor, anon, dailyLimit = 1, anonymousDailyLimitPerClient = 1, anonymousDailyLimitTotal = 100)
 
             every { jobs.countStartedSince(1L, any()) } returns 1L
 
@@ -159,9 +171,79 @@ class DeedUseCaseImplTest : BehaviorSpec({
             }
         }
 
+        When("비회원이 같은 주소에서 제한만큼 이미 분석했으면") {
+            val jobs = mockk<JobPersistencePort>()
+            val executor = mockk<AnalysisExecutorPort>()
+            val anon = mockk<AnonymousUsagePort>(relaxed = true)
+            val useCase = DeedUseCaseImpl(
+                jobs, mockk(), executor, anon,
+                dailyLimit = 1, anonymousDailyLimitPerClient = 1, anonymousDailyLimitTotal = 100,
+            )
+
+            every { anon.increaseClientUsage("1.2.3.4") } returns 2L
+
+            Then("거절하고 천장은 깎지 않는다") {
+                shouldThrow<BusinessException> {
+                    useCase.uploadDeed(anonymousUpload(clientAddress = "1.2.3.4"))
+                }.errorCode shouldBe ErrorCode.DAILY_LIMIT_EXCEEDED
+
+                // 거절당할 요청이 전체 몫을 깎으면, 한 사람이 남의 몫까지 태울 수 있다.
+                verify(exactly = 0) { anon.increaseTotalUsage() }
+                verify(exactly = 0) { jobs.create(any()) }
+            }
+        }
+
+        When("비회원 전체 천장을 넘겼으면") {
+            val jobs = mockk<JobPersistencePort>()
+            val anon = mockk<AnonymousUsagePort>(relaxed = true)
+            val useCase = DeedUseCaseImpl(
+                jobs, mockk(), mockk(), anon,
+                dailyLimit = 1, anonymousDailyLimitPerClient = 1, anonymousDailyLimitTotal = 100,
+            )
+
+            every { anon.increaseClientUsage(any()) } returns 1L
+            every { anon.increaseTotalUsage() } returns 101L
+
+            Then("주소가 처음이어도 거절한다") {
+                // 주소는 바꿀 수 있다. 천장이 닫히지 않으면 비용이 닫히지 않는다.
+                shouldThrow<BusinessException> {
+                    useCase.uploadDeed(anonymousUpload(clientAddress = "9.9.9.9"))
+                }.errorCode shouldBe ErrorCode.DAILY_LIMIT_EXCEEDED
+
+                verify(exactly = 0) { jobs.create(any()) }
+            }
+        }
+
+        When("비회원 사용량을 셀 수 없으면") {
+            val jobs = mockk<JobPersistencePort>()
+            val executor = mockk<AnalysisExecutorPort>()
+            val anon = mockk<AnonymousUsagePort>(relaxed = true)
+            val useCase = DeedUseCaseImpl(
+                jobs, mockk(), executor, anon,
+                dailyLimit = 1, anonymousDailyLimitPerClient = 1, anonymousDailyLimitTotal = 100,
+            )
+
+            every { anon.increaseClientUsage(any()) } returns null
+            every { anon.increaseTotalUsage() } returns null
+            every { jobs.create(any()) } returns job(userId = null)
+            every { executor.execute(any(), any(), any(), any(), any()) } just Runs
+
+            Then("막지 않고 통과시킨다") {
+                // 저장소가 흔들렸다고 서비스를 멈추지 않는다. 그동안 제한이 열린다는 뜻이기도 하다.
+                TransactionSynchronizationManager.initSynchronization()
+                try {
+                    useCase.uploadDeed(anonymousUpload(clientAddress = "1.2.3.4"))
+                } finally {
+                    TransactionSynchronizationManager.clearSynchronization()
+                }
+                verify(exactly = 1) { jobs.create(any()) }
+            }
+        }
+
         When("하루 사용량을 셀 때") {
             val jobs = mockk<JobPersistencePort>()
-            val useCase = DeedUseCaseImpl(jobs, mockk(), mockk(), dailyLimit = 1)
+            val anon = mockk<AnonymousUsagePort>(relaxed = true)
+            val useCase = DeedUseCaseImpl(jobs, mockk(), mockk(), anon, dailyLimit = 1, anonymousDailyLimitPerClient = 1, anonymousDailyLimitTotal = 100)
             every { jobs.countStartedSince(any(), any()) } returns 1L
 
             Then("오늘 자정 이후만 센다") {
@@ -185,7 +267,8 @@ class DeedUseCaseImplTest : BehaviorSpec({
 
         When("남의 작업을 구독하려 하면") {
             val jobs = mockk<JobPersistencePort>()
-            val useCase = DeedUseCaseImpl(jobs, mockk(), mockk(), dailyLimit = 1)
+            val anon = mockk<AnonymousUsagePort>(relaxed = true)
+            val useCase = DeedUseCaseImpl(jobs, mockk(), mockk(), anon, dailyLimit = 1, anonymousDailyLimitPerClient = 1, anonymousDailyLimitTotal = 100)
             every { jobs.findByJobId("job-1") } returns job(userId = 99L)
 
             Then("접근을 막는다") {
@@ -197,7 +280,8 @@ class DeedUseCaseImplTest : BehaviorSpec({
 
         When("비회원이 주인 있는 작업을 구독하려 하면") {
             val jobs = mockk<JobPersistencePort>()
-            val useCase = DeedUseCaseImpl(jobs, mockk(), mockk(), dailyLimit = 1)
+            val anon = mockk<AnonymousUsagePort>(relaxed = true)
+            val useCase = DeedUseCaseImpl(jobs, mockk(), mockk(), anon, dailyLimit = 1, anonymousDailyLimitPerClient = 1, anonymousDailyLimitTotal = 100)
             every { jobs.findByJobId("job-1") } returns job(userId = 99L)
 
             Then("접근을 막는다") {
@@ -210,7 +294,8 @@ class DeedUseCaseImplTest : BehaviorSpec({
         When("주인 없는 작업을 비회원이 구독하면") {
             val jobs = mockk<JobPersistencePort>()
             val sse = mockk<SseNotifierPort>()
-            val useCase = DeedUseCaseImpl(jobs, sse, mockk(), dailyLimit = 1)
+            val anon = mockk<AnonymousUsagePort>(relaxed = true)
+            val useCase = DeedUseCaseImpl(jobs, sse, mockk(), anon, dailyLimit = 1, anonymousDailyLimitPerClient = 1, anonymousDailyLimitTotal = 100)
 
             every { jobs.findByJobId("job-1") } returns job(userId = null)
             every { sse.createEmitter("job-1") } returns SseEmitter()
@@ -225,7 +310,8 @@ class DeedUseCaseImplTest : BehaviorSpec({
         When("구독 시점에 분석이 이미 끝나 있으면") {
             val jobs = mockk<JobPersistencePort>()
             val sse = mockk<SseNotifierPort>()
-            val useCase = DeedUseCaseImpl(jobs, sse, mockk(), dailyLimit = 1)
+            val anon = mockk<AnonymousUsagePort>(relaxed = true)
+            val useCase = DeedUseCaseImpl(jobs, sse, mockk(), anon, dailyLimit = 1, anonymousDailyLimitPerClient = 1, anonymousDailyLimitTotal = 100)
 
             every { jobs.findByJobId("job-1") } returns job(status = JobStatus.COMPLETED)
             every { sse.createEmitter("job-1") } returns SseEmitter()
@@ -246,7 +332,8 @@ class DeedUseCaseImplTest : BehaviorSpec({
 
         When("남의 작업을 조회하려 하면") {
             val jobs = mockk<JobPersistencePort>()
-            val useCase = DeedUseCaseImpl(jobs, mockk(), mockk(), dailyLimit = 1)
+            val anon = mockk<AnonymousUsagePort>(relaxed = true)
+            val useCase = DeedUseCaseImpl(jobs, mockk(), mockk(), anon, dailyLimit = 1, anonymousDailyLimitPerClient = 1, anonymousDailyLimitTotal = 100)
             every { jobs.findByJobId("job-1") } returns job(userId = 99L)
 
             Then("접근을 막는다") {
@@ -257,7 +344,8 @@ class DeedUseCaseImplTest : BehaviorSpec({
 
         When("비회원이 주인 있는 작업을 조회하려 하면") {
             val jobs = mockk<JobPersistencePort>()
-            val useCase = DeedUseCaseImpl(jobs, mockk(), mockk(), dailyLimit = 1)
+            val anon = mockk<AnonymousUsagePort>(relaxed = true)
+            val useCase = DeedUseCaseImpl(jobs, mockk(), mockk(), anon, dailyLimit = 1, anonymousDailyLimitPerClient = 1, anonymousDailyLimitTotal = 100)
             every { jobs.findByJobId("job-1") } returns job(userId = 99L)
 
             Then("접근을 막는다") {
@@ -268,7 +356,8 @@ class DeedUseCaseImplTest : BehaviorSpec({
 
         When("주인 없는 작업을 조회하면") {
             val jobs = mockk<JobPersistencePort>()
-            val useCase = DeedUseCaseImpl(jobs, mockk(), mockk(), dailyLimit = 1)
+            val anon = mockk<AnonymousUsagePort>(relaxed = true)
+            val useCase = DeedUseCaseImpl(jobs, mockk(), mockk(), anon, dailyLimit = 1, anonymousDailyLimitPerClient = 1, anonymousDailyLimitTotal = 100)
             every { jobs.findByJobId("job-1") } returns job(userId = null)
 
             Then("비회원도 회원도 볼 수 있다") {
@@ -280,7 +369,8 @@ class DeedUseCaseImplTest : BehaviorSpec({
 
         When("없는 작업을 조회하려 하면") {
             val jobs = mockk<JobPersistencePort>()
-            val useCase = DeedUseCaseImpl(jobs, mockk(), mockk(), dailyLimit = 1)
+            val anon = mockk<AnonymousUsagePort>(relaxed = true)
+            val useCase = DeedUseCaseImpl(jobs, mockk(), mockk(), anon, dailyLimit = 1, anonymousDailyLimitPerClient = 1, anonymousDailyLimitTotal = 100)
             every { jobs.findByJobId("nope") } returns null
 
             Then("찾을 수 없다고 알린다") {

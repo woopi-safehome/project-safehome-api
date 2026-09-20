@@ -3,6 +3,7 @@ package com.woopi.safehome.domain.deed.application.usecase
 import com.woopi.safehome.domain.deed.application.port.inbound.DeedUseCase
 import com.woopi.safehome.domain.deed.application.port.inbound.command.DeedCommand
 import com.woopi.safehome.domain.deed.application.port.inbound.AnalysisExecutorPort
+import com.woopi.safehome.domain.deed.application.port.outbound.AnonymousUsagePort
 import com.woopi.safehome.domain.deed.application.port.outbound.JobPersistencePort
 import com.woopi.safehome.domain.deed.application.port.outbound.SseNotifierPort
 import com.woopi.safehome.domain.deed.domain.model.AnalysisJob
@@ -26,7 +27,10 @@ class DeedUseCaseImpl(
     private val jobPersistencePort: JobPersistencePort,
     private val sseNotifierPort: SseNotifierPort,
     private val analysisExecutorPort: AnalysisExecutorPort,
+    private val anonymousUsagePort: AnonymousUsagePort,
     @Value("\${safehome.analysis.daily-limit}") private val dailyLimit: Int,
+    @Value("\${safehome.analysis.anonymous.daily-limit-per-client}") private val anonymousDailyLimitPerClient: Int,
+    @Value("\${safehome.analysis.anonymous.daily-limit-total}") private val anonymousDailyLimitTotal: Int,
 ) : DeedUseCase {
 
     /**
@@ -45,9 +49,40 @@ class DeedUseCaseImpl(
         if (startedToday >= dailyLimit) throw BusinessException(ErrorCode.DAILY_LIMIT_EXCEEDED)
     }
 
+    /**
+     * 비회원의 하루 제한. **주소를 단서로 세고, 비회원 전체에도 천장을 둔다.**
+     *
+     * 주소는 바꿀 수 있다 — VPN 이나 회선 전환이면 그만이다. 그래서 주소 제한만으로는
+     * 비용이 닫히지 않고, **전체 천장이 그 몫을 한다.** 반대로 천장만 두면
+     * 한 사람이 남의 몫까지 다 쓸 수 있으므로 둘이 같이 있어야 한다.
+     *
+     * **회원은 이 천장에 세지 않는다.** 비회원이 몰려도 회원의 하루치는 남아 있어야 한다.
+     *
+     * **셀 수 없으면 통과시킨다.** 이 저장소에서 캐시는 가용성의 전제가 아니다 —
+     * 저장소가 흔들렸다고 서비스를 멈추지 않는다. 그동안 제한이 열린다는 뜻이기도 하다.
+     */
+    private fun assertWithinAnonymousLimit(clientAddress: String?) {
+        if (clientAddress == null) return
+
+        val byClient = anonymousUsagePort.increaseClientUsage(clientAddress)
+        if (byClient != null && byClient > anonymousDailyLimitPerClient) {
+            throw BusinessException(ErrorCode.DAILY_LIMIT_EXCEEDED)
+        }
+
+        // 주소별로 먼저 막고 나서 천장을 센다. 순서가 반대면 거절당할 요청이 천장을 깎는다.
+        val total = anonymousUsagePort.increaseTotalUsage()
+        if (total != null && total > anonymousDailyLimitTotal) {
+            throw BusinessException(ErrorCode.DAILY_LIMIT_EXCEEDED)
+        }
+    }
+
     @Transactional
     override fun uploadDeed(command: DeedCommand.Upload): String {
-        assertWithinDailyLimit(command.userId)
+        if (command.userId == null) {
+            assertWithinAnonymousLimit(command.clientAddress)
+        } else {
+            assertWithinDailyLimit(command.userId)
+        }
 
         val jobId = UUID.randomUUID().toString()
 

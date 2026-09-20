@@ -148,7 +148,7 @@ python scripts/ci_status.py                                   # 푸시 뒤 원�
 | | |
 |---|---|
 | `POST /api/deed/upload` 🔓 | PDF 업로드 → 분석 Job 생성. 비회원이면 주인 없는 작업이 된다 |
-| 제한 | **회원은 하루에 정해진 횟수만 시작할 수 있다.** 넘기면 `DAILY_LIMIT_EXCEEDED`. 횟수는 설정이 갖는다 |
+| 제한 | **회원은 계정 기준, 비회원은 요청 주소 기준으로 하루 횟수가 정해져 있다.** 비회원에는 전체 천장도 있다. 넘기면 `DAILY_LIMIT_EXCEEDED`. 값은 설정이 갖는다 |
 | 요청 | `multipart/form-data` — `file` (PDF, 필수) · `leaseType` (`전세` \| `월세`, 선택) |
 | 응답 `data` | `{ "jobId": string }` |
 

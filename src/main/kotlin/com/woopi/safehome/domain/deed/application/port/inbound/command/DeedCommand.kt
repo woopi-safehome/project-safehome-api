@@ -10,5 +10,7 @@ object DeedCommand {
         val fileSize: Long,
         val userId: Long? = null,
         val leaseType: String? = null,
+        /** 비회원의 하루 사용량을 세는 단서. 회원이면 쓰지 않는다. */
+        val clientAddress: String? = null,
     )
 }
