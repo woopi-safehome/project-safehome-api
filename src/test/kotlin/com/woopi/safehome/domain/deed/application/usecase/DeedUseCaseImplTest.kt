@@ -92,6 +92,41 @@ class DeedUseCaseImplTest : BehaviorSpec({
                 verify(exactly = 1) { executor.execute(jobId, any(), any(), "전세", 1L) }
             }
         }
+
+        When("비회원이 작업을 맡기면") {
+            val jobs = mockk<JobPersistencePort>()
+            val executor = mockk<AnalysisExecutorPort>()
+            val useCase = DeedUseCaseImpl(jobs, mockk(), executor)
+
+            every { jobs.create(any()) } returns job(userId = null)
+            every { executor.execute(any(), any(), any(), any(), any()) } just Runs
+
+            val command = DeedCommand.Upload(
+                file = MockMultipartFile("file", "deed.pdf", "application/pdf", byteArrayOf(1, 2)),
+                fileName = "deed.pdf",
+                fileSize = 2L,
+                userId = null,
+                leaseType = null,
+            )
+
+            TransactionSynchronizationManager.initSynchronization()
+            try {
+                useCase.uploadDeed(command)
+                TransactionSynchronizationManager.getSynchronizations().forEach { it.afterCommit() }
+            } finally {
+                TransactionSynchronizationManager.clearSynchronization()
+            }
+
+            Then("주인 없는 작업이 된다") {
+                // 주인을 임의로 붙이면 남의 이력에 섞여 들어간다.
+                verify(exactly = 1) { jobs.create(match { it.userId == null }) }
+            }
+
+            Then("분석도 주인 없이 시작된다") {
+                // 이 값으로 푸시 대상을 찾으므로, 비어 있어야 발송을 건너뛴다.
+                verify(exactly = 1) { executor.execute(any(), any(), any(), null, null) }
+            }
+        }
     }
 
     Given("진행 상황 구독") {
@@ -105,6 +140,33 @@ class DeedUseCaseImplTest : BehaviorSpec({
                 // 식별자를 알아도 접근할 수 없어야 한다
                 shouldThrow<BusinessException> { useCase.streamJob("job-1", userId = 1L) }
                     .errorCode shouldBe ErrorCode.FORBIDDEN
+            }
+        }
+
+        When("비회원이 주인 있는 작업을 구독하려 하면") {
+            val jobs = mockk<JobPersistencePort>()
+            val useCase = DeedUseCaseImpl(jobs, mockk(), mockk())
+            every { jobs.findByJobId("job-1") } returns job(userId = 99L)
+
+            Then("접근을 막는다") {
+                // 비회원을 받기 시작하면서 열린 길이다. 식별자를 알아도 남의 것은 볼 수 없어야 한다.
+                shouldThrow<BusinessException> { useCase.streamJob("job-1", userId = null) }
+                    .errorCode shouldBe ErrorCode.FORBIDDEN
+            }
+        }
+
+        When("주인 없는 작업을 비회원이 구독하면") {
+            val jobs = mockk<JobPersistencePort>()
+            val sse = mockk<SseNotifierPort>()
+            val useCase = DeedUseCaseImpl(jobs, sse, mockk())
+
+            every { jobs.findByJobId("job-1") } returns job(userId = null)
+            every { sse.createEmitter("job-1") } returns SseEmitter()
+
+            Then("구독할 수 있다") {
+                // 비회원에게는 식별자 말고 알아볼 것이 없다. 막으면 자기 분석도 못 본다.
+                useCase.streamJob("job-1", userId = null)
+                verify(exactly = 1) { sse.createEmitter("job-1") }
             }
         }
 
@@ -138,6 +200,29 @@ class DeedUseCaseImplTest : BehaviorSpec({
             Then("접근을 막는다") {
                 shouldThrow<BusinessException> { useCase.getJob("job-1", userId = 1L) }
                     .errorCode shouldBe ErrorCode.FORBIDDEN
+            }
+        }
+
+        When("비회원이 주인 있는 작업을 조회하려 하면") {
+            val jobs = mockk<JobPersistencePort>()
+            val useCase = DeedUseCaseImpl(jobs, mockk(), mockk())
+            every { jobs.findByJobId("job-1") } returns job(userId = 99L)
+
+            Then("접근을 막는다") {
+                shouldThrow<BusinessException> { useCase.getJob("job-1", userId = null) }
+                    .errorCode shouldBe ErrorCode.FORBIDDEN
+            }
+        }
+
+        When("주인 없는 작업을 조회하면") {
+            val jobs = mockk<JobPersistencePort>()
+            val useCase = DeedUseCaseImpl(jobs, mockk(), mockk())
+            every { jobs.findByJobId("job-1") } returns job(userId = null)
+
+            Then("비회원도 회원도 볼 수 있다") {
+                // 주인이 없으므로 식별자 자체가 열쇠다. 회원이라고 막을 이유도 없다.
+                useCase.getJob("job-1", userId = null).jobId shouldBe "job-1"
+                useCase.getJob("job-1", userId = 1L).jobId shouldBe "job-1"
             }
         }
 
