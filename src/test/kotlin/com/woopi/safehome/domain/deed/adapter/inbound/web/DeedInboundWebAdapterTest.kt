@@ -78,6 +78,24 @@ class DeedInboundWebAdapterTest : BehaviorSpec({
                 command.captured.userId shouldBe 77L
             }
         }
+
+        When("앞단 프록시를 거쳐 들어오면") {
+            val (useCase, mvc) = fixture()
+            val command = slot<DeedCommand.Upload>()
+            every { useCase.uploadDeed(capture(command)) } returns "job-10"
+
+            mvc.perform(
+                multipart("/api/deed/upload")
+                    .file(MockMultipartFile("file", "등기부.pdf", "application/pdf", byteArrayOf(1)))
+                    .with { it.remoteAddr = "10.0.0.5"; it }
+                    .header("X-Forwarded-For", "203.0.113.7")
+            ).andExpect(status().isOk)
+
+            Then("연결 주소가 아니라 원래 요청자의 주소를 넘긴다") {
+                // 연결 주소를 넘기면 웹을 거친 모든 비회원이 한 주소로 묶여 첫 한 건 뒤로 전부 막힌다.
+                command.captured.clientAddress shouldBe "203.0.113.7"
+            }
+        }
     }
 
     Given("이력 목록 요청") {

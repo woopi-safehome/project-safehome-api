@@ -8,6 +8,7 @@ import com.woopi.safehome.global.auth.CurrentUser
 import com.woopi.safehome.global.response.ApiResponse
 import com.woopi.safehome.global.response.PagedResponse
 import com.woopi.safehome.global.response.PaginationInfo
+import com.woopi.safehome.global.web.ClientAddress
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.tags.Tag
 import jakarta.servlet.http.HttpServletRequest
@@ -46,7 +47,7 @@ class DeedInboundWebAdapter(
             fileSize = request.file.size,
             userId = userId,
             leaseType = request.leaseType,
-            clientAddress = httpRequest.remoteAddr,
+            clientAddress = ClientAddress.of(httpRequest),
         )
         val jobId = deedUseCase.uploadDeed(command)
         return ApiResponse.success(DeedResponse.UploadResult(jobId))
