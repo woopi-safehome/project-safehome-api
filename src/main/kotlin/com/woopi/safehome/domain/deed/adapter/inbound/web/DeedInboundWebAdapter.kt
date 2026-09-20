@@ -35,7 +35,7 @@ class DeedInboundWebAdapter(
     )
     @PostMapping("/upload", consumes = [MediaType.MULTIPART_FORM_DATA_VALUE])
     fun uploadDeed(
-        @CurrentUser userId: Long,
+        @CurrentUser userId: Long?,
         @ModelAttribute request: DeedRequest.Upload,
     ): ApiResponse<DeedResponse.UploadResult> {
         val command = DeedCommand.Upload(
@@ -55,7 +55,7 @@ class DeedInboundWebAdapter(
     )
     @GetMapping("/jobs/{jobId}/stream", produces = [MediaType.TEXT_EVENT_STREAM_VALUE])
     fun streamJob(
-        @CurrentUser userId: Long,
+        @CurrentUser userId: Long?,
         @PathVariable jobId: String,
     ): SseEmitter {
         return deedUseCase.streamJob(jobId, userId)
@@ -67,7 +67,7 @@ class DeedInboundWebAdapter(
     )
     @GetMapping("/jobs/{jobId}")
     fun getJob(
-        @CurrentUser userId: Long,
+        @CurrentUser userId: Long?,
         @PathVariable jobId: String,
     ): ApiResponse<DeedResponse.JobDetail> {
         val job = deedUseCase.getJob(jobId, userId)

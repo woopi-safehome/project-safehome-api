@@ -69,7 +69,15 @@ python scripts/ci_status.py                                   # 푸시 뒤 원�
 
 ### 공통 규약
 
-**인증** — 보호된 엔드포인트는 `Authorization: Bearer <accessToken>` 헤더를 요구한다.
+**인증** — 보호된 엔드포인트(🔒)는 `Authorization: Bearer <accessToken>` 헤더를 요구한다.
+
+**회원과 비회원을 모두 받는 엔드포인트(🔓)가 있다.** 헤더가 없으면 비회원으로 처리하고,
+**헤더가 왔는데 토큰이 유효하지 않으면 거절한다** — 만료된 토큰을 든 사용자가 자기도 모르게
+비회원으로 떨어지지 않게 하기 위해서다.
+
+**비회원이 만든 작업은 주인이 없다.** 그래서 **작업 식별자를 아는 사람이 조회·구독할 수 있다** —
+식별자 자체가 열쇠다. 주인이 있는 작업은 종전대로 본인만 볼 수 있다.
+비회원은 이력 목록을 가질 수 없다. 묶어 줄 식별자가 없기 때문이다.
 
 **시각** — 시각 필드는 전부 **오프셋 없는 ISO-8601 로컬 시각**이다 (`2026-09-08T14:23:45.123`).
 어느 시간대인지가 값에 들어 있지 않으므로, **UTC로 가정해 파싱하면 서버 시간대만큼 어긋난다.**
@@ -134,24 +142,24 @@ python scripts/ci_status.py                                   # 푸시 뒤 원�
 | `DELETE /api/users/me` | 회원 탈퇴 (카카오 연결 해제 포함) |
 | 응답 `data` | 없음 |
 
-### 등기부등본 분석 🔒
+### 등기부등본 분석
 
 | | |
 |---|---|
-| `POST /api/deed/upload` | PDF 업로드 → 분석 Job 생성 |
+| `POST /api/deed/upload` 🔓 | PDF 업로드 → 분석 Job 생성. 비회원이면 주인 없는 작업이 된다 |
 | 요청 | `multipart/form-data` — `file` (PDF, 필수) · `leaseType` (`전세` \| `월세`, 선택) |
 | 응답 `data` | `{ "jobId": string }` |
 
 | | |
 |---|---|
-| `GET /api/deed/jobs/{jobId}/stream` | 분석 진행 상황 구독 (SSE) |
+| `GET /api/deed/jobs/{jobId}/stream` 🔓 | 분석 진행 상황 구독 (SSE) |
 | 응답 | `text/event-stream`. **봉투로 감싸지 않는다** — 아래 이벤트 페이로드를 그대로 보낸다 |
 | 이벤트 | `{ "jobId": string, "status": 분석상태, "step": 분석단계 \| null, "message": string, "timestamp": ISO-8601 }` |
 | 종료 | `status` 가 `COMPLETED` 또는 `FAILED` 이면 서버가 스트림을 닫는다 |
 
 | | |
 |---|---|
-| `GET /api/deed/jobs/{jobId}` | Job 단건 조회 |
+| `GET /api/deed/jobs/{jobId}` 🔓 | Job 단건 조회 |
 | 응답 `data` | `{ "jobId": string, "fileName": string, "fileSize": number, "status": 분석상태, "step": 분석단계 \| null, "description": string \| null, "result": object \| null }` |
 
 > `result` 는 **JSON 객체를 그대로** 내려준다(문자열로 감싸지 않음). 분석이 끝나기 전에는 `null`.
@@ -159,7 +167,7 @@ python scripts/ci_status.py                                   # 푸시 뒤 원�
 
 | | |
 |---|---|
-| `GET /api/deed/jobs` | 내 분석 이력 목록 |
+| `GET /api/deed/jobs` 🔒 | 내 분석 이력 목록. 비회원은 가질 수 없다 |
 | 쿼리 | `page` (0부터, 기본 0) · `size` (기본 20) |
 | 응답 `data` | `{ "items": [ ... ], "pagination": { ... } }` |
 | `items[]` | `{ "jobId": string, "fileName": string, "fileSize": number, "status": 분석상태, "safetyLevel": 안전등급 \| null, "address": string \| null, "createdAt": ISO-8601 \| null, "leaseType": string \| null }` |

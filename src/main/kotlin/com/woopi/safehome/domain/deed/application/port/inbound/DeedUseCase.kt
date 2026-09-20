@@ -12,9 +12,9 @@ interface DeedUseCase {
     fun uploadDeed(command: DeedCommand.Upload): String
 
     /** jobId에 해당하는 SSE 스트림 구독 (분석 진행상황 실시간 수신) */
-    fun streamJob(jobId: String, userId: Long): SseEmitter
+    fun streamJob(jobId: String, userId: Long?): SseEmitter
 
-    fun getJob(jobId: String, userId: Long): AnalysisJob.Data
+    fun getJob(jobId: String, userId: Long?): AnalysisJob.Data
 
     fun getMyJobs(userId: Long, pageable: Pageable): Page<AnalysisJob.Data>
 

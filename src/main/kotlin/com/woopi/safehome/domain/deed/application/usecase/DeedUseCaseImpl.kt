@@ -53,11 +53,23 @@ class DeedUseCaseImpl(
         return jobId
     }
 
-    override fun streamJob(jobId: String, userId: Long): SseEmitter {
+    /**
+     * 이 작업을 볼 수 있는지 확인한다.
+     *
+     * **주인이 없는 작업은 jobId 를 아는 사람이 볼 수 있다.** 비회원 분석이 그렇다 —
+     * 식별할 것이 없으므로 jobId 자체가 열쇠 역할을 한다. 그래서 jobId 는 추측할 수 없어야 한다.
+     * 주인이 있는 작업은 종전대로 본인만 볼 수 있다. 비회원이 남의 작업을 여는 길은 열리지 않는다.
+     */
+    private fun assertReadable(job: AnalysisJob.Data, userId: Long?) {
+        if (job.userId == null) return
+        if (job.userId != userId) throw BusinessException(ErrorCode.FORBIDDEN)
+    }
+
+    override fun streamJob(jobId: String, userId: Long?): SseEmitter {
         val job = jobPersistencePort.findByJobId(jobId)
             ?: throw BusinessException(ErrorCode.NOT_FOUND)
 
-        if (job.userId != userId) throw BusinessException(ErrorCode.FORBIDDEN)
+        assertReadable(job, userId)
 
         val emitter = sseNotifierPort.createEmitter(jobId)
 
@@ -74,11 +86,11 @@ class DeedUseCaseImpl(
         return emitter
     }
 
-    override fun getJob(jobId: String, userId: Long): AnalysisJob.Data {
+    override fun getJob(jobId: String, userId: Long?): AnalysisJob.Data {
         val job = jobPersistencePort.findByJobId(jobId)
             ?: throw BusinessException(ErrorCode.NOT_FOUND)
 
-        if (job.userId != userId) throw BusinessException(ErrorCode.FORBIDDEN)
+        assertReadable(job, userId)
 
         return job
     }

@@ -35,6 +35,15 @@ class EndpointAuthenticationConstraintTest(
         "/api/auth/refresh",
     )
 
+    // 회원과 비회원을 모두 받는 경로 — 인증 인자를 비워 둘 수 있게(`Long?`) 선언한 곳.
+    // **비워 둘 수 있다는 것은 인증이 강제되지 않는다는 뜻이다.** 리졸버는 둘 다 받아들이므로
+    // 이 구분을 여기서 하지 않으면, 실수로 `Long?` 을 쓴 엔드포인트가 보호받는 것처럼 통과한다.
+    val optionalAuthPatterns = setOf(
+        "/api/deed/upload",
+        "/api/deed/jobs/{jobId}",
+        "/api/deed/jobs/{jobId}/stream",
+    )
+
     Given("이 애플리케이션이 등록한 모든 엔드포인트") {
 
         val ourHandlers = handlerMapping.handlerMethods
@@ -46,11 +55,18 @@ class EndpointAuthenticationConstraintTest(
                 .filter { (info, handler) ->
                     if (info.patternValues.any { it in publicPatterns }) return@filter false
 
+                    val params = (0 until handler.method.parameterCount)
+                        .map { MethodParameter(handler.method, it) }
+
                     // 조건을 여기에 복제하지 않는다. 실제 리졸버에게 묻는다.
                     // 리졸버가 받아들이지 않으면 그 인자는 인증에 쓰이지 않는다.
-                    (0 until handler.method.parameterCount).none { i ->
-                        currentUserResolver.supportsParameter(MethodParameter(handler.method, i))
-                    }
+                    val authParams = params.filter { currentUserResolver.supportsParameter(it) }
+                    if (authParams.isEmpty()) return@filter true
+
+                    // 비워 둘 수 있게 선언했다면 인증이 강제되지 않는다.
+                    // 그런 경로는 공개와 마찬가지로 목록에 올라와 있어야 한다.
+                    val enforcesAuth = authParams.any { it.parameterType == Long::class.java }
+                    !enforcesAuth && info.patternValues.none { it in optionalAuthPatterns }
                 }
                 .map { (info, handler) ->
                     "${info.patternValues.joinToString()} → ${handler.beanType.simpleName}.${handler.method.name}"
@@ -66,7 +82,9 @@ class EndpointAuthenticationConstraintTest(
             Then("인증 인자를 받지 않는 엔드포인트가 하나도 없어야 한다") {
                 withClue(
                     "보안 필터가 없어 인증 인자가 유일한 인증 지점이다. 선언하지 않으면 아무 검사 없이 열린다. " +
-                        "공개할 엔드포인트라면 이 테스트의 공개 목록에 올린다 — domain/auth/README.md"
+                        "인자를 `Long?` 으로 선언한 것도 인증을 강제하지 않는다 — 비회원을 받으려는 것이라면 " +
+                        "이 테스트의 optionalAuthPatterns 에, 아예 공개할 것이라면 publicPatterns 에 올린다 " +
+                        "— domain/auth/README.md"
                 ) {
                     unprotected shouldBe emptyList()
                 }
