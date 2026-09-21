@@ -11,10 +11,14 @@ interface DeedUseCase {
     /** PDF 업로드 → Job 생성 → 비동기 분석 시작, jobId 반환 */
     fun uploadDeed(command: DeedCommand.Upload): String
 
-    /** jobId에 해당하는 SSE 스트림 구독 (분석 진행상황 실시간 수신) */
-    fun streamJob(jobId: String, userId: Long?): SseEmitter
+    /**
+     * jobId에 해당하는 SSE 스트림 구독 (분석 진행상황 실시간 수신)
+     *
+     * 비회원 작업은 업로드한 브라우저(익명 쿠키)만 볼 수 있다.
+     */
+    fun streamJob(jobId: String, userId: Long?, anonymousId: String? = null): SseEmitter
 
-    fun getJob(jobId: String, userId: Long?): AnalysisJob.Data
+    fun getJob(jobId: String, userId: Long?, anonymousId: String? = null): AnalysisJob.Data
 
     fun getMyJobs(userId: Long, pageable: Pageable): Page<AnalysisJob.Data>
 

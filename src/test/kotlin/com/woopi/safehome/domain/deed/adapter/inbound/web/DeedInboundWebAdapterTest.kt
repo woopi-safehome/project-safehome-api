@@ -3,10 +3,13 @@ package com.woopi.safehome.domain.deed.adapter.inbound.web
 import com.woopi.safehome.domain.deed.application.port.inbound.DeedUseCase
 import com.woopi.safehome.domain.deed.application.port.inbound.command.DeedCommand
 import com.woopi.safehome.domain.deed.domain.model.AnalysisJob
+import com.woopi.safehome.global.auth.AnonymousIdArgumentResolver
 import com.woopi.safehome.global.auth.CurrentUser
 import com.woopi.safehome.global.enums.JobStatus
 import io.kotest.core.spec.style.BehaviorSpec
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.shouldNotBe
+import io.kotest.matchers.string.shouldContain
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
@@ -50,7 +53,7 @@ class DeedInboundWebAdapterTest : BehaviorSpec({
         val useCase = mockk<DeedUseCase>()
         val mvc = MockMvcBuilders
             .standaloneSetup(DeedInboundWebAdapter(useCase))
-            .setCustomArgumentResolvers(고정사용자)
+            .setCustomArgumentResolvers(고정사용자, AnonymousIdArgumentResolver())
             .build()
         return useCase to mvc
     }
@@ -76,6 +79,49 @@ class DeedInboundWebAdapterTest : BehaviorSpec({
             Then("인증에서 얻은 사용자를 명령에 넣는다") {
                 // 요청 본문이 아니라 인증에서 온다. 본문에서 받으면 남의 작업을 만들 수 있다.
                 command.captured.userId shouldBe 77L
+            }
+        }
+
+        When("익명 쿠키 없이 올리면") {
+            val (useCase, mvc) = fixture()
+            val command = slot<DeedCommand.Upload>()
+            every { useCase.uploadDeed(capture(command)) } returns "job-11"
+
+            val setCookie = mvc.perform(
+                multipart("/api/deed/upload")
+                    .file(MockMultipartFile("file", "등기부.pdf", "application/pdf", byteArrayOf(1)))
+            ).andExpect(status().isOk)
+                .andReturn().response.getHeader("Set-Cookie")
+
+            Then("익명 주인을 새로 만들어 쿠키로 내려주고 같은 값을 명령에 넣는다") {
+                // 이 값이 없으면 비회원 결과를 jobId 만으로 누구나 열 수 있다.
+                setCookie shouldNotBe null
+                val issued = setCookie!!.substringAfter("${AnonymousIdArgumentResolver.COOKIE_NAME}=").substringBefore(';')
+                command.captured.anonymousId shouldBe issued
+            }
+
+            Then("스크립트가 읽을 수 없는 쿠키다") {
+                setCookie!! shouldContain "HttpOnly"
+                setCookie shouldContain "SameSite=Lax"
+            }
+        }
+
+        When("익명 쿠키를 가지고 올리면") {
+            val (useCase, mvc) = fixture()
+            val command = slot<DeedCommand.Upload>()
+            every { useCase.uploadDeed(capture(command)) } returns "job-12"
+
+            val 기존 = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+            val setCookie = mvc.perform(
+                multipart("/api/deed/upload")
+                    .file(MockMultipartFile("file", "등기부.pdf", "application/pdf", byteArrayOf(1)))
+                    .cookie(jakarta.servlet.http.Cookie(AnonymousIdArgumentResolver.COOKIE_NAME, 기존))
+            ).andExpect(status().isOk)
+                .andReturn().response.getHeader("Set-Cookie")
+
+            Then("그 값을 그대로 쓰고 새로 발급하지 않는다") {
+                command.captured.anonymousId shouldBe 기존
+                setCookie shouldBe null
             }
         }
 
@@ -132,7 +178,7 @@ class DeedInboundWebAdapterTest : BehaviorSpec({
     Given("작업 단건 조회") {
         When("식별자를 경로로 주면") {
             val (useCase, mvc) = fixture()
-            every { useCase.getJob("job-3", 77L) } returns AnalysisJob.Data(
+            every { useCase.getJob("job-3", 77L, any()) } returns AnalysisJob.Data(
                 id = 1L, jobId = "job-3", fileName = "a.pdf", fileSize = 1L,
                 status = JobStatus.COMPLETED, userId = 77L,
             )
@@ -142,7 +188,7 @@ class DeedInboundWebAdapterTest : BehaviorSpec({
                 .andExpect(jsonPath("$.data.jobId").value("job-3"))
 
             Then("경로의 식별자와 인증된 사용자를 함께 넘긴다") {
-                io.mockk.verify(exactly = 1) { useCase.getJob("job-3", 77L) }
+                io.mockk.verify(exactly = 1) { useCase.getJob("job-3", 77L, any()) }
             }
         }
     }

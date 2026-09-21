@@ -31,9 +31,14 @@ import java.time.LocalDate
  */
 class DeedUseCaseImplTest : BehaviorSpec({
 
+    // 익명 쿠키가 가리키는 브라우저. 값이 다르면 다른 브라우저다.
+    val 브라우저A = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+    val 브라우저B = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
+
     fun job(
         jobId: String = "job-1",
         userId: Long? = 1L,
+        anonymousId: String? = null,
         status: JobStatus = JobStatus.PENDING,
     ) = AnalysisJob.Data(
         id = 1L,
@@ -42,15 +47,17 @@ class DeedUseCaseImplTest : BehaviorSpec({
         fileSize = 100L,
         status = status,
         userId = userId,
+        anonymousId = anonymousId,
         step = if (status == JobStatus.COMPLETED) AnalysisStep.POST_PROCESSING else null,
     )
 
-    fun anonymousUpload(clientAddress: String) = DeedCommand.Upload(
+    fun anonymousUpload(clientAddress: String, anonymousId: String = 브라우저A) = DeedCommand.Upload(
         file = MockMultipartFile("file", "deed.pdf", "application/pdf", byteArrayOf(1, 2)),
         fileName = "deed.pdf",
         fileSize = 2L,
         userId = null,
         clientAddress = clientAddress,
+        anonymousId = anonymousId,
     )
 
     Given("업로드") {
@@ -103,6 +110,11 @@ class DeedUseCaseImplTest : BehaviorSpec({
             Then("커밋 뒤에 분석이 시작된다") {
                 verify(exactly = 1) { executor.execute(jobId, any(), any(), "전세", 1L) }
             }
+
+            Then("회원 작업에는 익명 주인을 남기지 않는다") {
+                // 주인이 둘이면 어느 쪽이 기준인지 흐려진다.
+                verify(exactly = 1) { jobs.create(match { it.anonymousId == null }) }
+            }
         }
 
         When("비회원이 작업을 맡기면") {
@@ -120,6 +132,7 @@ class DeedUseCaseImplTest : BehaviorSpec({
                 fileSize = 2L,
                 userId = null,
                 leaseType = null,
+                anonymousId = 브라우저A,
             )
 
             TransactionSynchronizationManager.initSynchronization()
@@ -130,9 +143,10 @@ class DeedUseCaseImplTest : BehaviorSpec({
                 TransactionSynchronizationManager.clearSynchronization()
             }
 
-            Then("주인 없는 작업이 된다") {
-                // 주인을 임의로 붙이면 남의 이력에 섞여 들어간다.
-                verify(exactly = 1) { jobs.create(match { it.userId == null }) }
+            Then("회원 주인은 비우고, 업로드한 브라우저를 주인으로 남긴다") {
+                // 회원 주인을 임의로 붙이면 남의 이력에 섞여 들어간다.
+                // 브라우저를 남기지 않으면 결과를 jobId 만으로 누구나 열 수 있다.
+                verify(exactly = 1) { jobs.create(match { it.userId == null && it.anonymousId == 브라우저A }) }
             }
 
             Then("분석도 주인 없이 시작된다") {
@@ -291,7 +305,7 @@ class DeedUseCaseImplTest : BehaviorSpec({
             }
         }
 
-        When("주인 없는 작업을 비회원이 구독하면") {
+        When("익명 쿠키를 쓰기 전에 만들어진 작업을 비회원이 구독하면") {
             val jobs = mockk<JobPersistencePort>()
             val sse = mockk<SseNotifierPort>()
             val anon = mockk<AnonymousUsagePort>(relaxed = true)
@@ -301,7 +315,7 @@ class DeedUseCaseImplTest : BehaviorSpec({
             every { sse.createEmitter("job-1") } returns SseEmitter()
 
             Then("구독할 수 있다") {
-                // 비회원에게는 식별자 말고 알아볼 것이 없다. 막으면 자기 분석도 못 본다.
+                // 확인할 기준이 없는 옛 작업이다. 막으면 그때 만든 분석을 아무도 못 본다.
                 useCase.streamJob("job-1", userId = null)
                 verify(exactly = 1) { sse.createEmitter("job-1") }
             }
@@ -354,16 +368,64 @@ class DeedUseCaseImplTest : BehaviorSpec({
             }
         }
 
-        When("주인 없는 작업을 조회하면") {
+        When("익명 쿠키를 쓰기 전에 만들어진 작업을 조회하면") {
             val jobs = mockk<JobPersistencePort>()
             val anon = mockk<AnonymousUsagePort>(relaxed = true)
             val useCase = DeedUseCaseImpl(jobs, mockk(), mockk(), anon, dailyLimit = 1, anonymousDailyLimitPerClient = 1, anonymousDailyLimitTotal = 100)
             every { jobs.findByJobId("job-1") } returns job(userId = null)
 
             Then("비회원도 회원도 볼 수 있다") {
-                // 주인이 없으므로 식별자 자체가 열쇠다. 회원이라고 막을 이유도 없다.
+                // 확인할 기준이 없는 옛 작업이다. 식별자 자체가 열쇠로 남는다.
                 useCase.getJob("job-1", userId = null).jobId shouldBe "job-1"
                 useCase.getJob("job-1", userId = 1L).jobId shouldBe "job-1"
+            }
+        }
+
+        When("비회원 작업을 업로드한 브라우저가 조회하면") {
+            val jobs = mockk<JobPersistencePort>()
+            val anon = mockk<AnonymousUsagePort>(relaxed = true)
+            val useCase = DeedUseCaseImpl(jobs, mockk(), mockk(), anon, dailyLimit = 1, anonymousDailyLimitPerClient = 1, anonymousDailyLimitTotal = 100)
+            every { jobs.findByJobId("job-1") } returns job(userId = null, anonymousId = 브라우저A)
+
+            Then("볼 수 있다") {
+                useCase.getJob("job-1", userId = null, anonymousId = 브라우저A).jobId shouldBe "job-1"
+            }
+        }
+
+        When("비회원 작업을 다른 브라우저가 조회하려 하면") {
+            val jobs = mockk<JobPersistencePort>()
+            val anon = mockk<AnonymousUsagePort>(relaxed = true)
+            val useCase = DeedUseCaseImpl(jobs, mockk(), mockk(), anon, dailyLimit = 1, anonymousDailyLimitPerClient = 1, anonymousDailyLimitTotal = 100)
+            every { jobs.findByJobId("job-1") } returns job(userId = null, anonymousId = 브라우저A)
+
+            Then("식별자를 알아도 막는다") {
+                // 등기부에는 주소와 소유자 이름이 들어 있다. 링크가 새면 그대로 노출된다.
+                shouldThrow<BusinessException> { useCase.getJob("job-1", userId = null, anonymousId = 브라우저B) }
+                    .errorCode shouldBe ErrorCode.FORBIDDEN
+            }
+
+            Then("쿠키가 아예 없어도 막는다") {
+                shouldThrow<BusinessException> { useCase.getJob("job-1", userId = null, anonymousId = null) }
+                    .errorCode shouldBe ErrorCode.FORBIDDEN
+            }
+
+            Then("회원이라도 막는다") {
+                // 로그인했다고 남이 올린 비회원 분석을 볼 이유는 없다.
+                shouldThrow<BusinessException> { useCase.getJob("job-1", userId = 1L, anonymousId = 브라우저B) }
+                    .errorCode shouldBe ErrorCode.FORBIDDEN
+            }
+        }
+
+        When("비회원 작업을 다른 브라우저가 구독하려 하면") {
+            val jobs = mockk<JobPersistencePort>()
+            val anon = mockk<AnonymousUsagePort>(relaxed = true)
+            val useCase = DeedUseCaseImpl(jobs, mockk(), mockk(), anon, dailyLimit = 1, anonymousDailyLimitPerClient = 1, anonymousDailyLimitTotal = 100)
+            every { jobs.findByJobId("job-1") } returns job(userId = null, anonymousId = 브라우저A)
+
+            Then("진행 상황도 막는다") {
+                // 조회만 막고 구독을 열어 두면 결과가 그대로 흘러간다.
+                shouldThrow<BusinessException> { useCase.streamJob("job-1", userId = null, anonymousId = 브라우저B) }
+                    .errorCode shouldBe ErrorCode.FORBIDDEN
             }
         }
 

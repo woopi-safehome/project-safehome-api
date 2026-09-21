@@ -1,5 +1,6 @@
 -- 분석 job 테이블 (기존 테이블 컬럼 누락분 패치)
 ALTER TABLE IF EXISTS analysis_jobs ADD COLUMN IF NOT EXISTS lease_type VARCHAR(100) NULL;
+ALTER TABLE IF EXISTS analysis_jobs ADD COLUMN IF NOT EXISTS anonymous_id VARCHAR(64) NULL;
 
 -- 분석 job 테이블
 CREATE TABLE IF NOT EXISTS analysis_jobs (
@@ -15,6 +16,7 @@ CREATE TABLE IF NOT EXISTS analysis_jobs (
     address      VARCHAR(500) NULL,
     lease_type   VARCHAR(100) NULL,
     user_id      BIGINT       NULL,
+    anonymous_id VARCHAR(64)  NULL,
     is_deleted   BOOLEAN      NOT NULL DEFAULT FALSE,
     created_id   BIGINT       NOT NULL,
     created_at   TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,

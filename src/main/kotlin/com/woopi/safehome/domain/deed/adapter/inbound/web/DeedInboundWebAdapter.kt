@@ -4,6 +4,7 @@ import com.woopi.safehome.domain.deed.adapter.inbound.web.dto.DeedRequest
 import com.woopi.safehome.domain.deed.adapter.inbound.web.dto.DeedResponse
 import com.woopi.safehome.domain.deed.application.port.inbound.DeedUseCase
 import com.woopi.safehome.domain.deed.application.port.inbound.command.DeedCommand
+import com.woopi.safehome.global.auth.AnonymousId
 import com.woopi.safehome.global.auth.CurrentUser
 import com.woopi.safehome.global.response.ApiResponse
 import com.woopi.safehome.global.response.PagedResponse
@@ -38,6 +39,7 @@ class DeedInboundWebAdapter(
     @PostMapping("/upload", consumes = [MediaType.MULTIPART_FORM_DATA_VALUE])
     fun uploadDeed(
         @CurrentUser userId: Long?,
+        @AnonymousId anonymousId: String,
         @ModelAttribute request: DeedRequest.Upload,
         httpRequest: HttpServletRequest,
     ): ApiResponse<DeedResponse.UploadResult> {
@@ -48,6 +50,7 @@ class DeedInboundWebAdapter(
             userId = userId,
             leaseType = request.leaseType,
             clientAddress = ClientAddress.of(httpRequest),
+            anonymousId = anonymousId,
         )
         val jobId = deedUseCase.uploadDeed(command)
         return ApiResponse.success(DeedResponse.UploadResult(jobId))
@@ -60,9 +63,10 @@ class DeedInboundWebAdapter(
     @GetMapping("/jobs/{jobId}/stream", produces = [MediaType.TEXT_EVENT_STREAM_VALUE])
     fun streamJob(
         @CurrentUser userId: Long?,
+        @AnonymousId anonymousId: String,
         @PathVariable jobId: String,
     ): SseEmitter {
-        return deedUseCase.streamJob(jobId, userId)
+        return deedUseCase.streamJob(jobId, userId, anonymousId)
     }
 
     @Operation(
@@ -72,9 +76,10 @@ class DeedInboundWebAdapter(
     @GetMapping("/jobs/{jobId}")
     fun getJob(
         @CurrentUser userId: Long?,
+        @AnonymousId anonymousId: String,
         @PathVariable jobId: String,
     ): ApiResponse<DeedResponse.JobDetail> {
-        val job = deedUseCase.getJob(jobId, userId)
+        val job = deedUseCase.getJob(jobId, userId, anonymousId)
         return ApiResponse.success(DeedResponse.JobDetail.from(job))
     }
 

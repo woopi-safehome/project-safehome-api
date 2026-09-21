@@ -1,5 +1,6 @@
 package com.woopi.safehome.global.config
 
+import com.woopi.safehome.global.auth.AnonymousIdArgumentResolver
 import com.woopi.safehome.global.auth.CurrentUserArgumentResolver
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
@@ -16,6 +17,7 @@ import java.util.concurrent.ThreadPoolExecutor
 @EnableAsync
 class AsyncConfig(
     private val currentUserArgumentResolver: CurrentUserArgumentResolver,
+    private val anonymousIdArgumentResolver: AnonymousIdArgumentResolver,
 ) : WebMvcConfigurer {
 
     @Bean(name = ["analysisTaskExecutor"])
@@ -41,5 +43,6 @@ class AsyncConfig(
 
     override fun addArgumentResolvers(resolvers: MutableList<HandlerMethodArgumentResolver>) {
         resolvers.add(currentUserArgumentResolver)
+        resolvers.add(anonymousIdArgumentResolver)
     }
 }

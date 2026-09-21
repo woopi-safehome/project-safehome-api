@@ -93,6 +93,8 @@ class DeedUseCaseImpl(
                 fileSize = command.fileSize,
                 status = JobStatus.PENDING,
                 userId = command.userId,
+                // 회원 작업에는 익명 주인을 남기지 않는다. 주인이 둘이면 어느 쪽이 기준인지 흐려진다.
+                anonymousId = if (command.userId == null) command.anonymousId else null,
                 leaseType = command.leaseType,
             )
         )
@@ -112,20 +114,26 @@ class DeedUseCaseImpl(
     /**
      * 이 작업을 볼 수 있는지 확인한다.
      *
-     * **주인이 없는 작업은 jobId 를 아는 사람이 볼 수 있다.** 비회원 분석이 그렇다 —
-     * 식별할 것이 없으므로 jobId 자체가 열쇠 역할을 한다. 그래서 jobId 는 추측할 수 없어야 한다.
-     * 주인이 있는 작업은 종전대로 본인만 볼 수 있다. 비회원이 남의 작업을 여는 길은 열리지 않는다.
+     * 회원 작업은 본인만, **비회원 작업은 업로드한 브라우저(익명 쿠키)만** 볼 수 있다.
+     * 등기부에는 주소와 소유자 이름이 들어 있어, jobId 만으로 열면 링크가 새는 순간 그대로 노출된다.
+     *
+     * **주인이 아예 없는 작업은 예외다** — 익명 쿠키를 쓰기 전에 만들어진 것들이라
+     * 확인할 기준이 없다. 그때는 종전대로 jobId 가 열쇠다. 새로 만들어지는 작업에는 해당하지 않는다.
      */
-    private fun assertReadable(job: AnalysisJob.Data, userId: Long?) {
-        if (job.userId == null) return
-        if (job.userId != userId) throw BusinessException(ErrorCode.FORBIDDEN)
+    private fun assertReadable(job: AnalysisJob.Data, userId: Long?, anonymousId: String?) {
+        if (job.userId != null) {
+            if (job.userId != userId) throw BusinessException(ErrorCode.FORBIDDEN)
+            return
+        }
+        if (job.anonymousId == null) return
+        if (job.anonymousId != anonymousId) throw BusinessException(ErrorCode.FORBIDDEN)
     }
 
-    override fun streamJob(jobId: String, userId: Long?): SseEmitter {
+    override fun streamJob(jobId: String, userId: Long?, anonymousId: String?): SseEmitter {
         val job = jobPersistencePort.findByJobId(jobId)
             ?: throw BusinessException(ErrorCode.NOT_FOUND)
 
-        assertReadable(job, userId)
+        assertReadable(job, userId, anonymousId)
 
         val emitter = sseNotifierPort.createEmitter(jobId)
 
@@ -142,11 +150,11 @@ class DeedUseCaseImpl(
         return emitter
     }
 
-    override fun getJob(jobId: String, userId: Long?): AnalysisJob.Data {
+    override fun getJob(jobId: String, userId: Long?, anonymousId: String?): AnalysisJob.Data {
         val job = jobPersistencePort.findByJobId(jobId)
             ?: throw BusinessException(ErrorCode.NOT_FOUND)
 
-        assertReadable(job, userId)
+        assertReadable(job, userId, anonymousId)
 
         return job
     }

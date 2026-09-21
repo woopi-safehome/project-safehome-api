@@ -26,6 +26,9 @@ class AnalysisJobEntity(
     @Column(name = "user_id")
     var userId: Long? = null,
 
+    @Column(name = "anonymous_id")
+    var anonymousId: String? = null,
+
     @Column(name = "step")
     @Enumerated(EnumType.STRING)
     var step: AnalysisStep? = null,
