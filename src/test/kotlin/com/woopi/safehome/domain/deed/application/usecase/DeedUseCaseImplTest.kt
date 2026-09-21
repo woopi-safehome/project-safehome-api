@@ -51,7 +51,7 @@ class DeedUseCaseImplTest : BehaviorSpec({
         step = if (status == JobStatus.COMPLETED) AnalysisStep.POST_PROCESSING else null,
     )
 
-    fun anonymousUpload(clientAddress: String, anonymousId: String = 브라우저A) = DeedCommand.Upload(
+    fun anonymousUpload(clientAddress: String?, anonymousId: String = 브라우저A) = DeedCommand.Upload(
         file = MockMultipartFile("file", "deed.pdf", "application/pdf", byteArrayOf(1, 2)),
         fileName = "deed.pdf",
         fileSize = 2L,
@@ -230,27 +230,63 @@ class DeedUseCaseImplTest : BehaviorSpec({
 
         When("비회원 사용량을 셀 수 없으면") {
             val jobs = mockk<JobPersistencePort>()
-            val executor = mockk<AnalysisExecutorPort>()
             val anon = mockk<AnonymousUsagePort>(relaxed = true)
             val useCase = DeedUseCaseImpl(
-                jobs, mockk(), executor, anon,
+                jobs, mockk(), mockk(), anon,
                 dailyLimit = 1, anonymousDailyLimitPerClient = 1, anonymousDailyLimitTotal = 100,
             )
 
             every { anon.increaseClientUsage(any()) } returns null
             every { anon.increaseTotalUsage() } returns null
-            every { jobs.create(any()) } returns job(userId = null)
-            every { executor.execute(any(), any(), any(), any(), any()) } just Runs
 
-            Then("막지 않고 통과시킨다") {
-                // 저장소가 흔들렸다고 서비스를 멈추지 않는다. 그동안 제한이 열린다는 뜻이기도 하다.
-                TransactionSynchronizationManager.initSynchronization()
-                try {
+            Then("통과시키지 않고 막는다") {
+                // 이 천장이 비용의 유일한 보장이다. 세지 못하는 동안 열어 두면 보장 자체가 사라진다.
+                shouldThrow<BusinessException> {
                     useCase.uploadDeed(anonymousUpload(clientAddress = "1.2.3.4"))
-                } finally {
-                    TransactionSynchronizationManager.clearSynchronization()
-                }
-                verify(exactly = 1) { jobs.create(any()) }
+                }.errorCode shouldBe ErrorCode.SERVICE_UNAVAILABLE
+
+                verify(exactly = 0) { jobs.create(any()) }
+            }
+        }
+
+        When("천장만 셀 수 없으면") {
+            val jobs = mockk<JobPersistencePort>()
+            val anon = mockk<AnonymousUsagePort>(relaxed = true)
+            val useCase = DeedUseCaseImpl(
+                jobs, mockk(), mockk(), anon,
+                dailyLimit = 1, anonymousDailyLimitPerClient = 1, anonymousDailyLimitTotal = 100,
+            )
+
+            every { anon.increaseClientUsage(any()) } returns 1L
+            every { anon.increaseTotalUsage() } returns null
+
+            Then("주소별 한도를 통과했어도 막는다") {
+                shouldThrow<BusinessException> {
+                    useCase.uploadDeed(anonymousUpload(clientAddress = "1.2.3.4"))
+                }.errorCode shouldBe ErrorCode.SERVICE_UNAVAILABLE
+
+                verify(exactly = 0) { jobs.create(any()) }
+            }
+        }
+
+        When("주소를 알 수 없는 비회원이 올리면") {
+            val jobs = mockk<JobPersistencePort>()
+            val anon = mockk<AnonymousUsagePort>(relaxed = true)
+            val useCase = DeedUseCaseImpl(
+                jobs, mockk(), mockk(), anon,
+                dailyLimit = 1, anonymousDailyLimitPerClient = 1, anonymousDailyLimitTotal = 100,
+            )
+
+            every { anon.increaseTotalUsage() } returns 101L
+
+            Then("주소별 한도는 건너뛰어도 천장은 센다") {
+                // 주소가 없다고 통과시키면 헤더를 지우는 것만으로 천장을 비껴간다.
+                shouldThrow<BusinessException> {
+                    useCase.uploadDeed(anonymousUpload(clientAddress = null))
+                }.errorCode shouldBe ErrorCode.DAILY_LIMIT_EXCEEDED
+
+                verify(exactly = 0) { anon.increaseClientUsage(any()) }
+                verify(exactly = 1) { anon.increaseTotalUsage() }
             }
         }
 

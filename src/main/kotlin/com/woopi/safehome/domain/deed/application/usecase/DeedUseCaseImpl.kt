@@ -58,20 +58,25 @@ class DeedUseCaseImpl(
      *
      * **회원은 이 천장에 세지 않는다.** 비회원이 몰려도 회원의 하루치는 남아 있어야 한다.
      *
-     * **셀 수 없으면 통과시킨다.** 이 저장소에서 캐시는 가용성의 전제가 아니다 —
-     * 저장소가 흔들렸다고 서비스를 멈추지 않는다. 그동안 제한이 열린다는 뜻이기도 하다.
+     * **셀 수 없으면 막는다.** 캐시와 반대로 다루는 자리다 — 캐시는 없어도 결과가 같지만,
+     * 이 천장은 **비용의 유일한 보장**이라 세지 못하는 동안 열어 두면 보장 자체가 사라진다.
+     * 회원은 이 길을 지나지 않으므로, 저장소가 흔들려도 로그인한 사용자는 그대로 쓴다.
+     *
+     * **주소를 알 수 없어도 천장은 센다.** 주소가 없다고 통과시키면 헤더를 지우는 것만으로 천장을 비껴간다.
      */
     private fun assertWithinAnonymousLimit(clientAddress: String?) {
-        if (clientAddress == null) return
-
-        val byClient = anonymousUsagePort.increaseClientUsage(clientAddress)
-        if (byClient != null && byClient > anonymousDailyLimitPerClient) {
-            throw BusinessException(ErrorCode.DAILY_LIMIT_EXCEEDED)
+        if (clientAddress != null) {
+            val byClient = anonymousUsagePort.increaseClientUsage(clientAddress)
+                ?: throw BusinessException(ErrorCode.SERVICE_UNAVAILABLE)
+            if (byClient > anonymousDailyLimitPerClient) {
+                throw BusinessException(ErrorCode.DAILY_LIMIT_EXCEEDED)
+            }
         }
 
         // 주소별로 먼저 막고 나서 천장을 센다. 순서가 반대면 거절당할 요청이 천장을 깎는다.
         val total = anonymousUsagePort.increaseTotalUsage()
-        if (total != null && total > anonymousDailyLimitTotal) {
+            ?: throw BusinessException(ErrorCode.SERVICE_UNAVAILABLE)
+        if (total > anonymousDailyLimitTotal) {
             throw BusinessException(ErrorCode.DAILY_LIMIT_EXCEEDED)
         }
     }

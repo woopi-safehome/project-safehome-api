@@ -14,5 +14,6 @@ enum class ErrorCode(
     UNAUTHORIZED("UNAUTHORIZED", HttpStatus.UNAUTHORIZED, "인증이 필요합니다."),
     FORBIDDEN("FORBIDDEN", HttpStatus.FORBIDDEN, "접근 권한이 없습니다."),
     KAKAO_API_ERROR("KAKAO_API_ERROR", HttpStatus.BAD_GATEWAY, "카카오 API 오류가 발생했습니다."),
-    DAILY_LIMIT_EXCEEDED("DAILY_LIMIT_EXCEEDED", HttpStatus.TOO_MANY_REQUESTS, "오늘 분석 가능한 횟수를 모두 사용했습니다.")
+    DAILY_LIMIT_EXCEEDED("DAILY_LIMIT_EXCEEDED", HttpStatus.TOO_MANY_REQUESTS, "오늘 분석 가능한 횟수를 모두 사용했습니다."),
+    SERVICE_UNAVAILABLE("SERVICE_UNAVAILABLE", HttpStatus.SERVICE_UNAVAILABLE, "지금은 처리할 수 없습니다. 잠시 후 다시 시도해 주세요.")
 }

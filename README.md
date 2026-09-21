@@ -110,6 +110,7 @@ python scripts/ci_status.py                                   # 푸시 뒤 원�
 | `FORBIDDEN` | 403 |
 | `NOT_FOUND` | 404 |
 | `DAILY_LIMIT_EXCEEDED` | 429 |
+| `SERVICE_UNAVAILABLE` | 503 |
 | `KAKAO_API_ERROR` | 502 |
 | `INTERNAL_SERVER_ERROR` | 500 |
 
@@ -154,6 +155,7 @@ python scripts/ci_status.py                                   # 푸시 뒤 원�
 |---|---|
 | `POST /api/deed/upload` 🔓 | PDF 업로드 → 분석 Job 생성. 비회원이면 익명 쿠키가 주인이 되고, 쿠키가 없으면 발급한다 |
 | 제한 | **회원은 계정 기준, 비회원은 요청 주소 기준으로 하루 횟수가 정해져 있다.** 비회원에는 전체 천장도 있다. 넘기면 `DAILY_LIMIT_EXCEEDED`. 값은 설정이 갖는다 |
+| | **비회원 사용량을 셀 수 없으면 `SERVICE_UNAVAILABLE` 로 거절한다.** 잠시 뒤 다시 시도하면 된다 — 회원 요청은 영향받지 않는다 |
 | 요청 | `multipart/form-data` — `file` (PDF, 필수) · `leaseType` (`전세` \| `월세`, 선택) |
 | 응답 `data` | `{ "jobId": string }` |
 
