@@ -11,6 +11,7 @@ import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.MethodArgumentNotValidException
 import org.springframework.web.bind.annotation.ControllerAdvice
 import org.springframework.web.bind.annotation.ExceptionHandler
+import org.springframework.web.multipart.MaxUploadSizeExceededException
 
 @ControllerAdvice
 class GlobalExceptionHandler {
@@ -40,6 +41,21 @@ class GlobalExceptionHandler {
             violation.propertyPath.toString() to violation.message
         }
         return createErrorResponse(ErrorCode.CONSTRAINT_VIOLATION, errorDetails)
+    }
+
+    /**
+     * 업로드 한도를 넘은 요청. **컨트롤러에 닿기 전에 터진다** — 멀티파트를 푸는 단계에서 걸리므로
+     * 업로드 엔드포인트의 코드로는 이 경우를 다룰 수 없고, 여기서만 다룰 수 있다.
+     *
+     * 따로 받지 않으면 아래 포괄 핸들러로 떨어져 **"서버 내부 오류"** 가 나간다.
+     * 사용자가 할 수 있는 일(더 작은 파일)이 있는데도 서버 잘못처럼 보이고, Sentry 에도 쌓인다.
+     */
+    @ExceptionHandler(MaxUploadSizeExceededException::class)
+    fun handleMaxUploadSize(ex: MaxUploadSizeExceededException, request: HttpServletRequest, response: HttpServletResponse): ResponseEntity<ApiResponse<Nothing?>>? {
+        if (isSseContext(request, response)) return null
+        // 한도를 문서나 메시지에 복제하지 않는다. 설정이 원본이고 예외가 그 값을 들고 온다.
+        val details = ex.maxUploadSize.takeIf { it > 0 }?.let { mapOf("maxBytes" to it) }
+        return createErrorResponse(ErrorCode.FILE_TOO_LARGE, details)
     }
 
     @ExceptionHandler(Exception::class)

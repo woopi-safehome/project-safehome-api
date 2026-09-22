@@ -1,6 +1,18 @@
 spring:
   application:
     name: safehome
+
+  servlet:
+    multipart:
+      # 등기부등본 PDF 의 상한. **업로드를 거절할지 말지는 여기서만 정한다** —
+      # 앞단 프록시는 이보다 넉넉히 열어 두어, 넘친 요청도 우리가 만든 에러 응답을 받게 한다.
+      # 프록시가 먼저 자르면 사용자는 우리 봉투가 아닌 프록시의 HTML 오류를 보게 된다.
+      #
+      # 기본값은 1MB 다. 26쪽짜리 실제 등기부등본이 700KB 대라 권리 이력이 조금만 길어도 넘는다.
+      # 무한정 키우지는 않는다 — 파일은 통째로 메모리에 올라가 분석 스레드로 넘어간다.
+      max-file-size: 10MB
+      max-request-size: 12MB
+
   config:
     import:
       - classpath:application-db.yml
@@ -12,6 +24,13 @@ spring:
       - classpath:application-sentry.yml
       - classpath:application-auth.yml
       - classpath:application-analysis.yml
+
+server:
+  tomcat:
+    # 한도를 넘긴 요청의 **남은 본문을 끝까지 읽어 버린다.**
+    # 읽다 말고 끊으면 클라이언트는 413 응답 대신 연결 초기화를 보게 되어,
+    # 파일이 크다는 사실이 전달되지 않는다. 위 한도보다 커야 의미가 있다.
+    max-swallow-size: 20MB
 
 management:
   endpoints:

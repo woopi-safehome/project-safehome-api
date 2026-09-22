@@ -109,6 +109,7 @@ python scripts/ci_status.py                                   # 푸시 뒤 원�
 | `UNAUTHORIZED` | 401 |
 | `FORBIDDEN` | 403 |
 | `NOT_FOUND` | 404 |
+| `FILE_TOO_LARGE` | 413 |
 | `DAILY_LIMIT_EXCEEDED` | 429 |
 | `SERVICE_UNAVAILABLE` | 503 |
 | `KAKAO_API_ERROR` | 502 |
@@ -157,6 +158,8 @@ python scripts/ci_status.py                                   # 푸시 뒤 원�
 | 제한 | **회원은 계정 기준, 비회원은 요청 주소 기준으로 하루 횟수가 정해져 있다.** 비회원에는 전체 천장도 있다. 넘기면 `DAILY_LIMIT_EXCEEDED`. 값은 설정이 갖는다 |
 | | **비회원 사용량을 셀 수 없으면 `SERVICE_UNAVAILABLE` 로 거절한다.** 잠시 뒤 다시 시도하면 된다 — 회원 요청은 영향받지 않는다 |
 | 요청 | `multipart/form-data` — `file` (PDF, 필수) · `leaseType` (`전세` \| `월세`, 선택) |
+| 크기 | **한도를 넘으면 `FILE_TOO_LARGE`**, `details.maxBytes` 에 허용 크기가 온다. 값은 설정이 갖는다 |
+| | 이 거절은 **업로드 엔드포인트에 닿기 전**, 멀티파트를 푸는 단계에서 난다 |
 | 응답 `data` | `{ "jobId": string }` |
 
 | | |
