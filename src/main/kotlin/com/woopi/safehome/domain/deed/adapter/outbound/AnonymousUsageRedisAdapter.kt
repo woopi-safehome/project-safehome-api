@@ -36,6 +36,11 @@ class AnonymousUsageRedisAdapter(
     override fun increaseTotalUsage(): Long? =
         increase("$KEY_PREFIX${today()}:total")
 
+    override fun refund(clientAddress: String?) {
+        clientAddress?.let { decrease("$KEY_PREFIX${today()}:client:${hash(it)}") }
+        decrease("$KEY_PREFIX${today()}:total")
+    }
+
     private fun today(): String = LocalDate.now().toString()
 
     /** IP 를 그대로 남기지 않기 위한 것이다. 되돌릴 필요가 없으므로 단방향으로 충분하다. */
@@ -57,5 +62,18 @@ class AnonymousUsageRedisAdapter(
         // 셀 수 없다는 사실만 알린다. 막을지 통과시킬지는 유스케이스가 정한다.
         log.warn("[ANON_QUOTA] Redis 연결 실패, 사용량을 세지 못했다. key={}", key, e)
         null
+    }
+
+    /**
+     * 1 줄인다. **0 아래로 내려가면 키를 지운다** — 자정 전에 세고 자정 뒤에 되돌리면 오늘 키가 없는데,
+     * 그대로 두면 만료 없는 음수 키가 남아 다음 사람이 1회를 더 쓰게 된다.
+     */
+    private fun decrease(key: String) {
+        try {
+            val count = stringRedisTemplate.opsForValue().decrement(key)
+            if (count != null && count < 0) stringRedisTemplate.delete(key)
+        } catch (e: Exception) {
+            log.warn("[ANON_QUOTA] Redis 연결 실패, 사용량을 되돌리지 못했다. key={}", key, e)
+        }
     }
 }

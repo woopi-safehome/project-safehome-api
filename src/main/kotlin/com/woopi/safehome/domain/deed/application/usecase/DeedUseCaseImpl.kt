@@ -109,7 +109,10 @@ class DeedUseCaseImpl(
 
         TransactionSynchronizationManager.registerSynchronization(object : TransactionSynchronization {
             override fun afterCommit() {
-                analysisExecutorPort.execute(jobId, fileBytes, contentType, command.leaseType, command.userId)
+                analysisExecutorPort.execute(
+                    jobId, fileBytes, contentType, command.leaseType, command.userId,
+                    clientAddress = if (command.userId == null) command.clientAddress else null,
+                )
             }
         })
 

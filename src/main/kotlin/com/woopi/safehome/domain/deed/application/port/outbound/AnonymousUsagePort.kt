@@ -15,4 +15,12 @@ interface AnonymousUsagePort {
 
     /** 비회원 전체의 오늘 사용량을 1 늘리고, 늘린 뒤의 값을 돌려준다. */
     fun increaseTotalUsage(): Long?
+
+    /**
+     * 늘렸던 1회를 되돌린다 — 주소가 있으면 그 주소와 전체 모두. 주소가 없었으면 전체만 센 것이므로 전체만.
+     *
+     * **실패해도 조용히 넘어간다.** 되돌리지 못하면 사용자가 1회를 잃을 뿐이고,
+     * 그 때문에 이미 기록된 실패를 흔들면 안 된다.
+     */
+    fun refund(clientAddress: String?)
 }

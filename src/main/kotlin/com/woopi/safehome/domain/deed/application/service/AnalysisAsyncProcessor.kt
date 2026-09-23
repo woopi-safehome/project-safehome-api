@@ -2,6 +2,7 @@ package com.woopi.safehome.domain.deed.application.service
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.woopi.safehome.domain.deed.application.port.inbound.AnalysisExecutorPort
+import com.woopi.safehome.domain.deed.application.port.outbound.AnonymousUsagePort
 import com.woopi.safehome.domain.deed.application.port.outbound.JobPersistencePort
 import com.woopi.safehome.domain.deed.application.port.outbound.LlmAnalysisPort
 import com.woopi.safehome.domain.deed.application.port.outbound.LlmCachePort
@@ -30,6 +31,7 @@ class AnalysisAsyncProcessor(
     private val userDeviceQueryPort: UserDeviceQueryPort,
     private val notificationPort: NotificationPort,
     private val objectMapper: ObjectMapper,
+    private val anonymousUsagePort: AnonymousUsagePort,
 ) : AnalysisExecutorPort {
 
     private val log = LoggerFactory.getLogger(AnalysisAsyncProcessor::class.java)
@@ -43,13 +45,30 @@ class AnalysisAsyncProcessor(
     // 요청 스레드 밖에서 돈다. 예외가 새어 나가면 아무도 받지 않고, 작업은 진행 중으로 멈춘 채
     // 구독자는 끝을 받지 못한다. 그래서 결과를 만드는 단계의 예외는 전부 실패로 기록한다.
     @Async("analysisTaskExecutor")
-    override fun execute(jobId: String, fileBytes: ByteArray, contentType: String?, leaseType: String?, userId: Long?) {
+    override fun execute(
+        jobId: String,
+        fileBytes: ByteArray,
+        contentType: String?,
+        leaseType: String?,
+        userId: Long?,
+        clientAddress: String?,
+    ) {
         var step = AnalysisStep.PDF_PARSING
 
         fun updateAndNotify(status: JobStatus, next: AnalysisStep, message: String) {
             step = next
             jobPersistencePort.updateStatus(jobId, status, next, message)
             sseNotifierPort.notifyStep(jobId, status, next, message)
+        }
+
+        /**
+         * 비회원이 **문서 단계에서** 실패하면 하루 사용량을 되돌린다. 파일을 잘못 고른 사람이 그날을 잃지 않게.
+         *
+         * 분석 서버를 부른 뒤의 실패는 되돌리지 않는다 — 비용은 이미 나갔고, 되돌리면 분석 단계에서
+         * 실패하는 문서를 반복해 올리는 것만으로 비용 천장을 비껴갈 수 있다. 회원은 실패를 아예 세지 않으므로 해당 없다.
+         */
+        fun refundIfAnonymousBeforeAnalysis() {
+            if (userId == null && step == AnalysisStep.PDF_PARSING) anonymousUsagePort.refund(clientAddress)
         }
 
         // 1·2. 문서 해석과 분석 (캐시 우선)
@@ -65,6 +84,7 @@ class AnalysisAsyncProcessor(
                 }
             } catch (e: InvalidPdfException) {
                 updateAndNotify(JobStatus.FAILED, AnalysisStep.PDF_PARSING, e.message ?: "PDF 검증 실패")
+                refundIfAnonymousBeforeAnalysis()
                 return
             }
             log.info("[PDF_PARSING] jobId={}, sections={}", jobId, sections)
@@ -80,6 +100,7 @@ class AnalysisAsyncProcessor(
             }
         } catch (e: Exception) {
             fail(jobId, step, e)
+            refundIfAnonymousBeforeAnalysis()
             return
         }
 

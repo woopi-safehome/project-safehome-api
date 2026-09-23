@@ -71,7 +71,7 @@ class DeedUseCaseImplTest : BehaviorSpec({
 
             every { jobs.countStartedSince(1L, any()) } returns 0L
             every { jobs.create(any()) } returns job()
-            every { executor.execute(any(), any(), any(), any(), any()) } just Runs
+            every { executor.execute(any(), any(), any(), any(), any(), any()) } just Runs
 
             val command = DeedCommand.Upload(
                 file = MockMultipartFile("file", "deed.pdf", "application/pdf", byteArrayOf(1, 2)),
@@ -88,7 +88,7 @@ class DeedUseCaseImplTest : BehaviorSpec({
             try {
                 jobId = useCase.uploadDeed(command)
                 startedBeforeCommit =
-                    runCatching { verify(exactly = 1) { executor.execute(any(), any(), any(), any(), any()) } }
+                    runCatching { verify(exactly = 1) { executor.execute(any(), any(), any(), any(), any(), any()) } }
                         .isSuccess
                 TransactionSynchronizationManager.getSynchronizations().forEach { it.afterCommit() }
             } finally {
@@ -108,7 +108,7 @@ class DeedUseCaseImplTest : BehaviorSpec({
             }
 
             Then("커밋 뒤에 분석이 시작된다") {
-                verify(exactly = 1) { executor.execute(jobId, any(), any(), "전세", 1L) }
+                verify(exactly = 1) { executor.execute(jobId, any(), any(), "전세", 1L, null) }
             }
 
             Then("회원 작업에는 익명 주인을 남기지 않는다") {
@@ -124,7 +124,7 @@ class DeedUseCaseImplTest : BehaviorSpec({
             val useCase = DeedUseCaseImpl(jobs, mockk(), executor, anon, dailyLimit = 1, anonymousDailyLimitPerClient = 1, anonymousDailyLimitTotal = 100)
 
             every { jobs.create(any()) } returns job(userId = null)
-            every { executor.execute(any(), any(), any(), any(), any()) } just Runs
+            every { executor.execute(any(), any(), any(), any(), any(), any()) } just Runs
 
             val command = DeedCommand.Upload(
                 file = MockMultipartFile("file", "deed.pdf", "application/pdf", byteArrayOf(1, 2)),
@@ -151,7 +151,7 @@ class DeedUseCaseImplTest : BehaviorSpec({
 
             Then("분석도 주인 없이 시작된다") {
                 // 이 값으로 푸시 대상을 찾으므로, 비어 있어야 발송을 건너뛴다.
-                verify(exactly = 1) { executor.execute(any(), any(), any(), null, null) }
+                verify(exactly = 1) { executor.execute(any(), any(), any(), null, null, any()) }
             }
 
             Then("하루 제한을 세지 않는다") {
@@ -181,7 +181,7 @@ class DeedUseCaseImplTest : BehaviorSpec({
 
                 // 막기만 하고 작업이 남으면 이력이 더러워지고 분석 비용도 나간다.
                 verify(exactly = 0) { jobs.create(any()) }
-                verify(exactly = 0) { executor.execute(any(), any(), any(), any(), any()) }
+                verify(exactly = 0) { executor.execute(any(), any(), any(), any(), any(), any()) }
             }
         }
 

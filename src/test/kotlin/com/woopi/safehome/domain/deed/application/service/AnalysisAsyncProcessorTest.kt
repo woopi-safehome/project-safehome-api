@@ -1,6 +1,7 @@
 package com.woopi.safehome.domain.deed.application.service
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.woopi.safehome.domain.deed.application.port.outbound.AnonymousUsagePort
 import com.woopi.safehome.domain.deed.application.port.outbound.JobPersistencePort
 import com.woopi.safehome.domain.deed.application.port.outbound.LlmAnalysisPort
 import com.woopi.safehome.domain.deed.application.port.outbound.LlmCachePort
@@ -39,9 +40,10 @@ class AnalysisAsyncProcessorTest : BehaviorSpec({
         val cache = mockk<LlmCachePort>(relaxed = true)
         val devices = mockk<UserDeviceQueryPort>()
         val notification = mockk<NotificationPort>(relaxed = true)
+        val anonymousUsage = mockk<AnonymousUsagePort>(relaxed = true)
 
         val processor = AnalysisAsyncProcessor(
-            sse, jobs, validation, parser, analysis, cache, devices, notification, ObjectMapper(),
+            sse, jobs, validation, parser, analysis, cache, devices, notification, ObjectMapper(), anonymousUsage,
         )
 
         init {
@@ -84,6 +86,49 @@ class AnalysisAsyncProcessorTest : BehaviorSpec({
                         "job-4", JobStatus.FAILED, AnalysisStep.PDF_PARSING, AnalysisAsyncProcessor.UNREADABLE_DEED,
                     )
                 }
+            }
+        }
+    }
+
+    Given("비회원이 등기부가 아닌 문서를 올려 문서 단계에서 실패하면") {
+        // 파일을 잘못 고른 사람이 그날을 잃지 않게. 분석 서버를 부르기 전이라 비용도 없다.
+        val p = Ports()
+        every { p.parser.parse(any()) } returns DeedSections(emptyMap())
+
+        When("분석을 실행하면") {
+            p.processor.execute("job-5", byteArrayOf(1), "application/pdf", null, null, "1.2.3.4")
+
+            Then("그 주소의 하루 사용량을 되돌린다") {
+                verify(exactly = 1) { p.anonymousUsage.refund("1.2.3.4") }
+            }
+        }
+    }
+
+    Given("비회원의 분석이 분석 서버 단계에서 실패하면") {
+        // 비용은 이미 나갔다. 되돌리면 이 단계에서 실패하는 문서를 반복해 올려 비용 천장을 비껴갈 수 있다.
+        val p = Ports()
+        every { p.parser.parse(any()) } returns DeedSections(mapOf("갑구" to listOf("소유권보존")))
+        every { p.analysis.analyze(any(), any()) } throws IllegalStateException("상류 오류")
+
+        When("분석을 실행하면") {
+            p.processor.execute("job-6", byteArrayOf(1), "application/pdf", null, null, "1.2.3.4")
+
+            Then("사용량을 되돌리지 않는다") {
+                verify(exactly = 0) { p.anonymousUsage.refund(any()) }
+            }
+        }
+    }
+
+    Given("회원이 문서 단계에서 실패하면") {
+        // 회원은 실패한 분석을 아예 세지 않으므로 되돌릴 것이 없다.
+        val p = Ports()
+        every { p.parser.parse(any()) } returns DeedSections(emptyMap())
+
+        When("분석을 실행하면") {
+            p.processor.execute("job-7", byteArrayOf(1), "application/pdf", null, 7L, null)
+
+            Then("비회원 사용량을 건드리지 않는다") {
+                verify(exactly = 0) { p.anonymousUsage.refund(any()) }
             }
         }
     }
