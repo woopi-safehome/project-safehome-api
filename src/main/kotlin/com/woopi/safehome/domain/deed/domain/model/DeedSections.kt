@@ -6,4 +6,5 @@ data class DeedSections(
     fun get(name: String): List<String> = sections[name] ?: emptyList()
     fun hasSection(name: String): Boolean = sections.containsKey(name)
     fun sectionNames(): Set<String> = sections.keys
+    fun isEmpty(): Boolean = sections.isEmpty()
 }

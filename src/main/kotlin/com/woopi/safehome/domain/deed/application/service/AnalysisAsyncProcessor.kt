@@ -34,6 +34,12 @@ class AnalysisAsyncProcessor(
 
     private val log = LoggerFactory.getLogger(AnalysisAsyncProcessor::class.java)
 
+    companion object {
+        /** 사용자에게 그대로 보인다. 무엇이 문제인지와 무엇을 하면 되는지를 함께 말한다. */
+        const val UNREADABLE_DEED =
+            "등기부등본의 내용을 읽을 수 없어요. 인터넷등기소에서 받은 PDF 원본을 올려 주세요. (사진이나 스캔한 파일은 읽을 수 없어요)"
+    }
+
     // 요청 스레드 밖에서 돈다. 예외가 새어 나가면 아무도 받지 않고, 작업은 진행 중으로 멈춘 채
     // 구독자는 끝을 받지 못한다. 그래서 결과를 만드는 단계의 예외는 전부 실패로 기록한다.
     @Async("analysisTaskExecutor")
@@ -52,7 +58,11 @@ class AnalysisAsyncProcessor(
 
             val sections = try {
                 pdfValidationPort.validate(fileBytes, contentType)
-                pdfParserPort.parse(fileBytes)
+                pdfParserPort.parse(fileBytes).also {
+                    // 섹션이 하나도 없으면 등기부로 읽을 수 없는 문서다 — 다른 PDF 이거나, 글자가 없는 스캔본이다.
+                    // 분석 서버는 빈 섹션을 거절하므로 보내 봐야 "분석 오류"로만 끝난다. 여기서 원인을 말해 준다.
+                    if (it.isEmpty()) throw InvalidPdfException(UNREADABLE_DEED)
+                }
             } catch (e: InvalidPdfException) {
                 updateAndNotify(JobStatus.FAILED, AnalysisStep.PDF_PARSING, e.message ?: "PDF 검증 실패")
                 return

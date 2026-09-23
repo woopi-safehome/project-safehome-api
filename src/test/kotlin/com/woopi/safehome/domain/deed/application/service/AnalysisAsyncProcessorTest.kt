@@ -64,6 +64,30 @@ class AnalysisAsyncProcessorTest : BehaviorSpec({
         }
     }
 
+    Given("문서에서 등기부 섹션을 하나도 찾지 못하면") {
+        // 다른 PDF 이거나 글자가 없는 스캔본이다. 분석 서버는 빈 섹션을 거절하므로 보내 봐야 "분석 오류"로만 끝난다.
+        val p = Ports()
+        every { p.parser.parse(any()) } returns DeedSections(emptyMap())
+
+        When("분석을 실행하면") {
+            p.processor.execute("job-4", byteArrayOf(1), "application/pdf", null, 7L)
+
+            Then("분석 서버를 부르지 않고, 문서 단계의 실패로 원인과 해결 방법을 남긴다") {
+                verify(exactly = 0) { p.analysis.analyze(any(), any()) }
+                verify {
+                    p.jobs.updateStatus(
+                        "job-4", JobStatus.FAILED, AnalysisStep.PDF_PARSING, AnalysisAsyncProcessor.UNREADABLE_DEED,
+                    )
+                }
+                verify {
+                    p.sse.notifyStep(
+                        "job-4", JobStatus.FAILED, AnalysisStep.PDF_PARSING, AnalysisAsyncProcessor.UNREADABLE_DEED,
+                    )
+                }
+            }
+        }
+    }
+
     Given("분석 서버 호출이 실패하면") {
         val p = Ports()
         every { p.parser.parse(any()) } returns DeedSections(mapOf("갑구" to listOf("소유권보존")))
