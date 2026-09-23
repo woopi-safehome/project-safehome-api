@@ -50,3 +50,6 @@ project-safehome-app
 
 ### Secrets ###
 docker/**/.env
+### Python ###
+__pycache__/
+*.pyc

@@ -11,6 +11,7 @@
 
 import json
 import re
+import secrets
 import subprocess
 import sys
 import time
@@ -96,6 +97,8 @@ def main() -> int:
                        "-e", f"DB_WRITE_HOST={DB}", "-e", "DB_WRITE_PORT=5432",
                        "-e", f"DB_READ_HOST={DB}", "-e", "DB_READ_PORT=5432",
                        "-e", f"REDIS_HOST={CACHE}",
+                       # dev 프로파일은 서명 키가 없으면 기동을 거부한다. 이 컨테이너는 곧 버려지므로 매번 새로 만든 값이면 된다.
+                       "-e", f"JWT_SECRET={secrets.token_hex(32)}",
                        image])
         if started.returncode != 0:
             print("컨테이너를 띄우지 못했다:", started.stderr.strip())
