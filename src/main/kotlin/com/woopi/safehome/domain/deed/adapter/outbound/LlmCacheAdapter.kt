@@ -14,7 +14,8 @@ class LlmCacheAdapter(
     private val log = LoggerFactory.getLogger(LlmCacheAdapter::class.java)
 
     companion object {
-        private const val KEY_PREFIX = "llm:deed:v2:"
+        // v3: 분석 서버가 말소된 권리를 빼고 건수·합계를 코드로 세게 바뀌었다. 올리지 않으면 옛 결과가 만료까지 나간다.
+        private const val KEY_PREFIX = "llm:deed:v3:"
         private val TTL = Duration.ofDays(7)
     }
 
