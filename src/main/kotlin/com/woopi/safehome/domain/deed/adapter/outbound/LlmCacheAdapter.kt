@@ -15,7 +15,8 @@ class LlmCacheAdapter(
 
     companion object {
         // v3: 분석 서버가 말소된 권리를 빼고 건수·합계를 코드로 세게 바뀌었다. 올리지 않으면 옛 결과가 만료까지 나간다.
-        private const val KEY_PREFIX = "llm:deed:v3:"
+        // v4: 판정 문구·권고·지식 데이터의 사실관계를 법령 원문으로 고쳤다(2026-09-27). 옛 결과에 틀린 안내가 남아 있다.
+        private const val KEY_PREFIX = "llm:deed:v4:"
         private val TTL = Duration.ofDays(7)
     }
 
