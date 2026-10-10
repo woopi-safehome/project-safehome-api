@@ -16,5 +16,7 @@ enum class ErrorCode(
     KAKAO_API_ERROR("KAKAO_API_ERROR", HttpStatus.BAD_GATEWAY, "카카오 API 오류가 발생했습니다."),
     DAILY_LIMIT_EXCEEDED("DAILY_LIMIT_EXCEEDED", HttpStatus.TOO_MANY_REQUESTS, "오늘 분석 가능한 횟수를 모두 사용했습니다."),
     FILE_TOO_LARGE("FILE_TOO_LARGE", HttpStatus.PAYLOAD_TOO_LARGE, "파일이 너무 큽니다."),
+    METHOD_NOT_ALLOWED("METHOD_NOT_ALLOWED", HttpStatus.METHOD_NOT_ALLOWED, "지원하지 않는 요청 방식입니다."),
+    UNSUPPORTED_MEDIA_TYPE("UNSUPPORTED_MEDIA_TYPE", HttpStatus.UNSUPPORTED_MEDIA_TYPE, "지원하지 않는 요청 형식입니다."),
     SERVICE_UNAVAILABLE("SERVICE_UNAVAILABLE", HttpStatus.SERVICE_UNAVAILABLE, "지금은 처리할 수 없습니다. 잠시 후 다시 시도해 주세요.")
 }

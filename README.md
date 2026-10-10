@@ -109,11 +109,16 @@ python scripts/ci_status.py                                   # 푸시 뒤 원�
 | `UNAUTHORIZED` | 401 |
 | `FORBIDDEN` | 403 |
 | `NOT_FOUND` | 404 |
+| `METHOD_NOT_ALLOWED` | 405 |
 | `FILE_TOO_LARGE` | 413 |
+| `UNSUPPORTED_MEDIA_TYPE` | 415 |
 | `DAILY_LIMIT_EXCEEDED` | 429 |
 | `SERVICE_UNAVAILABLE` | 503 |
 | `KAKAO_API_ERROR` | 502 |
 | `INTERNAL_SERVER_ERROR` | 500 |
+
+없는 경로·맞지 않는 메서드나 형식·읽을 수 없는 본문도 이 표의 코드로 온다(없는 경로는 `NOT_FOUND`).
+`INTERNAL_SERVER_ERROR` 의 `details` 는 비어 있다 — 원인은 서버가 기록하고 응답에 싣지 않는다.
 
 **공유 열거값** — 클라이언트도 같은 값을 쓴다. 문자열 하드코딩 금지.
 
