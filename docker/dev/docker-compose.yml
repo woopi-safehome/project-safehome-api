@@ -16,8 +16,11 @@ services:
       REDIS_HOST: safehome-redis
       AI_API_URL: http://safehome-ai-api-dev:5000
       PIGEON_URL: http://pigeon-dev:8081
+    # 앞단 Caddy 만 닿으면 된다. 밖으로 직접 열면 TLS 를 건너뛰는 경로가 생긴다 —
+    # 인증 토큰이 평문으로 오가고, 그 경로로 온 요청은 비회원 쿠키(Secure)를 받지 못한다.
+    # 다른 컨테이너는 이 포트가 아니라 safehome-net 의 컨테이너 이름으로 부른다.
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"
     networks:
       - postgres-net
       - safehome-net

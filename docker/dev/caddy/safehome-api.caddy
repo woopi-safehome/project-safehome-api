@@ -1,0 +1,38 @@
+# safehome-api.devupii.store — API 를 직접 받는 주소. 앱이 이 주소로 서버와 통신한다.
+#
+# **이 파일이 원본이고 서버의 `/etc/caddy/sites/safehome-api.caddy` 가 사본이다.**
+# 고칠 때 이 파일을 고치고 서버로 옮긴다. 서버에서만 고치면 다음 재구축 때 사라진다.
+#
+# 서버의 Caddy 는 다른 프로젝트와 함께 쓰는 공용이다. 공용 `/etc/caddy/Caddyfile` 은
+# 전역 설정과 `import /etc/caddy/sites/*.caddy` 만 갖고, 여기서는 이 사이트 블록 하나만 맡는다.
+# 공용 파일은 고치지 않는다 — 한 프로젝트가 고치면 다른 프로젝트의 입구가 함께 바뀐다.
+#
+# 인증서 발급·갱신과 http → https 이동은 Caddy 가 알아서 한다. TLS 설정을 적지 않는다.
+#
+# API 컨테이너는 루프백(127.0.0.1:8080)에만 열려 있다. 밖에서 API 에 닿는 길은 이 주소뿐이어야
+# 한다 — 포트를 직접 열면 TLS 를 건너뛰는 경로가 생긴다.
+#
+# 전달 헤더: Host · X-Forwarded-For · X-Forwarded-Proto 는 Caddy 가 기본으로 보낸다.
+# nginx 때 보내던 X-Real-IP 는 보내지 않는다 — API 는 X-Forwarded-For 만 본다.
+# X-Forwarded-For 는 공용 설정에 trusted_proxies 가 없으면 클라이언트가 보낸 값을 버리고
+# 실제 연결 주소로 새로 쓴다. API 가 이 헤더의 맨 앞을 요청자로 믿으므로 그쪽이 맞다.
+
+safehome-api.devupii.store {
+	# 업로드 한도. 애플리케이션의 한도보다 넉넉히 두어 **한도를 판단하는 곳을 애플리케이션 한 곳으로 모은다.**
+	# 앞단이 먼저 자르면 앱은 API 가 만든 에러 응답 대신 Caddy 의 빈 413 을 받는다.
+	# 없애지는 않는다 — 기본값은 무제한이다. 단위는 MiB 다(Caddy 의 MB 는 10진).
+	request_body {
+		max_size 20MiB
+	}
+
+	# 경로를 자르지 않고 그대로 넘긴다.
+	reverse_proxy 127.0.0.1:8080 {
+		# 진행 상황 스트림(SSE). 둘 중 하나라도 빠지면 단계 표시가 동작하지 않는다.
+		#   flush_interval -1 — 모았다가 내보내지 않고 받는 즉시 흘려보낸다
+		#   read_timeout      — 분석 서버가 버티는 300초보다 길어야 한다
+		flush_interval -1
+		transport http {
+			read_timeout 310s
+		}
+	}
+}

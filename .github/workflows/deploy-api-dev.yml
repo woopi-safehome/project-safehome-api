@@ -115,14 +115,18 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Copy docker-compose to server
+      # Caddy 사이트 파일도 함께 올린다 ({DEPLOY_PATH}/caddy/safehome-api.caddy).
+      # 설치(/etc/caddy/sites/ 로 옮기기 · reload)는 여기서 하지 않는다 — root 가 필요하고,
+      # Caddy 는 다른 프로젝트와 함께 쓰는 공용이라 배포 계정에 root 를 주면 남의 입구까지 고칠 수 있게 된다.
+      # 서버에 원본을 두어 사람이 옮길 수 있게만 한다. 설치 절차는 README 의 "배포" 절에 있다.
+      - name: Copy deploy files to server
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.DEV_SSH_HOST }}
           username: ${{ secrets.DEV_SSH_USER }}
           key: ${{ secrets.DEV_SSH_PRIVATE_KEY }}
           port: ${{ secrets.DEV_SSH_PORT || 22 }}
-          source: "docker/dev/docker-compose.yml,docker/dev/init/"
+          source: "docker/dev/docker-compose.yml,docker/dev/init/,docker/dev/caddy/"
           target: ${{ env.DEPLOY_PATH }}
           strip_components: 2
 

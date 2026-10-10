@@ -230,6 +230,26 @@ python scripts/ci_status.py                                   # 푸시 뒤 원�
 이미 떠 있으면 그대로 두고, 내려가 있으면 올린다. 구성 파일을 바꾼 뒤 배포하면
 그 컨테이너가 재생성될 수 있다는 뜻이다.
 
+**API 는 서버 밖으로 직접 열지 않는다.** 컨테이너 포트는 루프백에만 묶이고, 밖에서는
+서버에 직접 설치된 **공용 Caddy**(다른 프로젝트와 함께 쓴다)가 `safehome-api.devupii.store` 로 받아 넘긴다.
+인증서는 Caddy 가 자동으로 받는다. 이 저장소는 사이트 파일 하나만 맡고, 원본은
+[`docker/dev/caddy/safehome-api.caddy`](docker/dev/caddy/safehome-api.caddy) 다.
+서버의 `/etc/caddy/sites/safehome-api.caddy` 는 사본이므로 **서버에서만 고치지 않는다.**
+공용 `/etc/caddy/Caddyfile`(전역 설정과 `import /etc/caddy/sites/*.caddy` 만 둔다)은 이 저장소가 고치지 않는다.
+
+배포는 사이트 파일을 서버의 배포 경로 아래 `caddy/` 까지 올려 두지만 **설치는 하지 않는다**
+(root 가 필요하다 — 이유는 워크플로 주석). 사이트 파일을 바꿨으면 공용 Caddy 가 설치된 서버에서 사람이 옮긴다.
+
+```bash
+sudo cp <DEPLOY_PATH>/caddy/safehome-api.caddy /etc/caddy/sites/safehome-api.caddy   # DEPLOY_PATH 는 워크플로의 값
+sudo caddy validate --config /etc/caddy/Caddyfile
+sudo systemctl reload caddy
+```
+
+`validate` 를 건너뛰지 않는다. 사이트 파일 하나의 오류가 공용 설정 전체의 reload 를 막아,
+같은 Caddy 를 쓰는 다른 프로젝트까지 새 설정을 못 받는다.
+처음 넣을 때는 이 도메인의 DNS 가 먼저 서버를 가리켜야 한다 — 인증서를 그 reload 때 받는다.
+
 **스키마 변경은 배포와 별개로 챙긴다.** 자동 DDL도 마이그레이션 도구도 없다.
 
 **롤백은 이전 이미지 태그로 되돌려 다시 띄운다.** 커밋마다 고유 태그가 남으므로
